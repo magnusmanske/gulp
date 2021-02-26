@@ -1,0 +1,30 @@
+[package]
+name = "gulp"
+version = "0.1.0"
+authors = ["Magnus Manske <mm6@sanger.ac.uk>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+#regex = "1"
+#lazy_static = "1"
+#chrono = "*"
+#config = "*"
+serde_json = "*"
+url = "*"
+#rayon = "*"
+#htmlescape = "*"
+#rand = "*"
+mysql_async = "^0.26"
+#reqwest = { version = "*", features = ["json"] }
+#time = "^0.2"
+#percent-encoding = "*"
+#async-trait = "0.1.42"
+#async-recursion = "0.3.1"
+#wikibase = { git = "https://gitlab.com/tobias47n9e/wikibase_rs" }
+tokio = { version = "^1", features = ["macros","fs","sync","rt-multi-thread"] }
+tokio-util = "*"
+hyper = { version = "^0.14", features = ["full"] }
+#qstring = "*"
+futures = "*"
