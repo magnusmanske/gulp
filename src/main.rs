@@ -57,11 +57,10 @@ async fn serve_file_path(filename:&str) -> Result<Response<Body>,Error> {
     match filename {
         "/" => simple_file_send("/index.html","text/html; charset=utf-8").await,
         "/index.html" => simple_file_send(filename,"text/html; charset=utf-8").await,
-        "/autolist.js" => simple_file_send(filename,"application/javascript; charset=utf-8").await,
         "/main.js" => simple_file_send(filename,"application/javascript; charset=utf-8").await,
         "/favicon.ico" => simple_file_send(filename,"image/x-icon; charset=utf-8").await,
         "/robots.txt" => simple_file_send(filename,"text/plain; charset=utf-8").await,
-        _ => not_found()
+_ => not_found()
     }
 }
 
