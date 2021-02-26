@@ -12,11 +12,11 @@ edition = "2018"
 #chrono = "*"
 #config = "*"
 serde_json = "*"
-url = "*"
+#url = "*"
 #rayon = "*"
 #htmlescape = "*"
 #rand = "*"
-mysql_async = "^0.26"
+#mysql_async = "^0.26"
 #reqwest = { version = "*", features = ["json"] }
 #time = "^0.2"
 #percent-encoding = "*"
@@ -25,6 +25,7 @@ mysql_async = "^0.26"
 #wikibase = { git = "https://gitlab.com/tobias47n9e/wikibase_rs" }
 tokio = { version = "^1", features = ["macros","fs","sync","rt-multi-thread"] }
 tokio-util = "*"
-hyper = { version = "^0.14", features = ["full"] }
+#hyper = { version = "^0.14", features = ["full"] }
 #qstring = "*"
 futures = "*"
+gotham = "0.5.0"
