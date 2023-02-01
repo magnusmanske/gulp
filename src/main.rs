@@ -1,3 +1,4 @@
+use app_state::AppState;
 use axum::{
     routing::get,
 //    Json, 
@@ -8,13 +9,21 @@ use axum::{
 //use serde_json::json;
 use std::net::SocketAddr;
 use std::env;
+use std::sync::Arc;
 use tracing;
 use tracing_subscriber;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
+use axum::{
+    Server,
+    extract::State
+};
 
+pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
-async fn root() -> Html<String> {
+pub mod app_state;
+
+async fn root(State(_state): State<Arc<AppState>>,) -> Html<String> {
     let html = r##"<h1>GULP</h1>
     "##;
     Html(html.into())
@@ -88,7 +97,7 @@ async fn supported_properties() -> Json<serde_json::Value> {
 }
  */
 
-async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
+async fn run_server(mut shared_state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let cors = CorsLayer::new().allow_origin(Any);
@@ -100,13 +109,14 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/meta_item/:prop/:id", get(meta_item))
         .route("/graph/:prop/:id", get(graph))
         .route("/extend/:item", get(extend)) */
+        .with_state(shared_state)
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(cors);
     
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     tracing::debug!("listening on {}", addr);
-    axum::Server::bind(&addr)
+    Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
@@ -115,9 +125,10 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Arc::new(AppState::from_config_file("config.json").expect("app creation failed"));
     let argv: Vec<String> = env::args().collect();
     match argv.get(1).map(|s|s.as_str()) {
-        _ => run_server().await?
+        _ => run_server(app).await?
     }
     Ok(())
 }
