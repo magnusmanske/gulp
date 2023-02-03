@@ -47,13 +47,12 @@ impl HeaderColumn {
 pub struct HeaderSchema {
     pub id: DbId,
     pub name: String,
-    pub json_id: DbId,
     pub columns: Vec<HeaderColumn>,
 }
 
 impl HeaderSchema {
     pub async fn from_id(conn: &mut Conn, header_schema_id: DbId) -> Option<Self> {
-        let sql = r#"SELECT header_schema.id,name,json_id,json FROM header_schema,json WHERE header_schema.id=:header_schema_id AND json_id=json.id"#;
+        let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE header_schema.id=:header_schema_id"#;
         conn
             .exec_iter(sql,params! {header_schema_id}).await.ok()?
             .map_and_drop(|row| Self::from_row(&row)).await.ok()?
@@ -61,7 +60,7 @@ impl HeaderSchema {
     }
 
     fn from_row(row: &mysql_async::Row) -> Option<Self> {
-        let json: String = row.get(3)?;
+        let json: String = row.get(2)?;
         let json: serde_json::Value = serde_json::from_str(&json).ok()?;
         let mut columns : Vec<HeaderColumn> = vec![];
         for column in json.as_object()?.get("columns")?.as_array()? {
@@ -70,7 +69,6 @@ impl HeaderSchema {
         Some(Self {
             id: row.get(0)?,
             name: row.get(1)?,
-            json_id: row.get(2)?,
             columns,
         })
     }

@@ -19,7 +19,7 @@ pub enum FileType {
 pub struct List {
     pub id: DbId,
     pub name: String,
-    pub revision_id: DbId,
+    pub revision_id: DbId, // ALWAYS THE CURRENT ONE
     pub header: Header,
 }
 
@@ -69,7 +69,6 @@ impl List {
     async fn import_jsonl(&self, conn: &mut Conn, text: &str) -> Result<(), GenericError> {
         let mut md5s = self.load_json_md5s(conn).await?;
         let mut next_row_num = self.get_max_row_num(conn).await? + 1;
-        println!("{} / {next_row_num}",md5s.len());
         let mut rows = vec![];
         for row in text.split("\n") {
             if row.is_empty() {
@@ -119,11 +118,35 @@ impl List {
         Ok(())
     }
 
+    /// Checks if a revision_id increase is necessary.
+    /// Returns the new current revision_id (which might be unchanged).
+    pub async fn snapshot(&mut self, conn: &mut Conn) -> Result<DbId, GenericError> {
+        // Check if there is a need to create a new snapshot, that is, increase the revision ID
+        let sql = "SELECT count(id) FROM `row` WHERE list_id=:list_id AND revision_id=:revision_id" ;
+        let list_id = self.id;
+        let revision_id = self.revision_id;
+        let numer_of_rows_with_current_revision = *conn
+            .exec_iter(sql,params! {list_id,revision_id}).await?
+            .map_and_drop(|row| mysql_async::from_row::<DbId>(row)).await?.get(0).unwrap();
+        if numer_of_rows_with_current_revision==0 { // No need to make a new snapshot
+            return Ok(self.revision_id);
+        }
+
+        // Create new revision ID
+        self.revision_id += 1 ;
+        let sql = "UPDATE `list` SET revision_id=:revision_id WHERE id=:list_id" ;
+        let list_id = self.id;
+        let revision_id = self.revision_id;
+        conn.exec_drop(sql, params!{list_id,revision_id}).await?;
+
+        Ok(self.revision_id)
+    }
+
     async fn check_json_exists(&self, _conn: &mut Conn, _json_text: &str, _json_md5: &str) -> Result<bool, GenericError> {
         // Already checked via md5, might have to implement if collisions occur
         /*
             let list_id = self.id;
-            println!("Checking {json_md5}");
+            // println!("Checking {json_md5}");
             let sql = "SELECT id FROM `row`
                 WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)
                 AND list_id=:list_id

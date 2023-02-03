@@ -19,13 +19,12 @@ use axum::{
     extract::State
 };
 
-use crate::list::FileType;
+//use crate::list::FileType;
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 pub mod app_state;
 pub mod header;
-pub mod json;
 pub mod cell;
 pub mod row;
 pub mod list;
@@ -136,10 +135,11 @@ async fn main() -> Result<(), GenericError> {
     let app = Arc::new(AppState::from_config_file("config.json").expect("app creation failed"));
 
     let mut conn = app.get_gulp_conn().await?;
-    let list = list::List::from_id(&mut conn, 4).await.expect("List is None");
+    let mut list = list::List::from_id(&mut conn, 4).await.expect("List is None");
     println!("{list:?}");
-    let result = list.import_from_url(&mut conn,"https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",FileType::JSONL).await;
-    println!("{result:?}");
+    // let _ = list.import_from_url(&mut conn,"https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",FileType::JSONL).await;
+    let revision_id = list.snapshot(&mut conn).await?;
+    println!("{revision_id:?}");
 
     if false {
         let argv: Vec<String> = env::args().collect();
