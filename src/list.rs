@@ -1,6 +1,8 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 use serde_json::json;
 use mysql_async::{prelude::*, Conn};
+use crate::app_state::AppState;
 use crate::header::*;
 use crate::cell::*;
 use crate::row::*;
@@ -21,34 +23,37 @@ pub struct List {
     pub name: String,
     pub revision_id: DbId, // ALWAYS THE CURRENT ONE
     pub header: Header,
+    pub app: Arc<AppState>,
 }
 
 impl List {
-    pub async fn from_id(conn: &mut Conn, list_id: DbId) -> Option<Self> {
+    pub async fn from_id(app: &Arc<AppState>, list_id: DbId) -> Option<Self> {
         let sql = r#"SELECT id,name,revision_id FROM `list` WHERE id=:list_id"#;
-        let row = conn
+        let row = app.get_gulp_conn().await.ok()?
             .exec_iter(sql,params! {list_id}).await.ok()?
             .map_and_drop(|row| row).await.ok()?
             .get(0)?.to_owned();
-        Self::from_row(conn, &row, list_id).await
+        Self::from_row(app, &row, list_id).await
     }
 
-    async fn from_row(conn: &mut Conn, row: &mysql_async::Row, list_id: DbId) -> Option<Self> {
+    async fn from_row(app: &Arc<AppState>, row: &mysql_async::Row, list_id: DbId) -> Option<Self> {
+        let mut conn = app.get_gulp_conn().await.ok()?;
         Some(Self {
+            app: app.clone(),
             id: row.get(0)?,
             name: row.get(1)?,
             revision_id: row.get(2)?,
-            header: Header::from_list_id(conn, list_id).await?,
+            header: Header::from_list_id(&mut conn, list_id).await?,
         })
     }
 
-    pub async fn import_from_url(&self, conn: &mut Conn, url: &str, file_type: FileType) -> Result<(), GenericError> {
+    pub async fn import_from_url(&self, url: &str, file_type: FileType) -> Result<(), GenericError> {
         let client = reqwest::Client::builder()
             .user_agent("gulp/0.1")
             .build()?;
         let text = client.get(url).send().await?.text().await?;
         let _ = match file_type {
-            FileType::JSONL => self.import_jsonl(conn,&text).await?,
+            FileType::JSONL => self.import_jsonl(&text).await?,
             _ => return Err("import_from_url: unsopported type {file_type}".into()),
         };
         Ok(())
@@ -66,9 +71,10 @@ impl List {
         Ok(ret)
     }
 
-    async fn import_jsonl(&self, conn: &mut Conn, text: &str) -> Result<(), GenericError> {
-        let mut md5s = self.load_json_md5s(conn).await?;
-        let mut next_row_num = self.get_max_row_num(conn).await? + 1;
+    async fn import_jsonl(&self, text: &str) -> Result<(), GenericError> {
+        let mut conn = self.app.get_gulp_conn().await?;
+        let mut md5s = self.load_json_md5s(&mut conn).await?;
+        let mut next_row_num = self.get_max_row_num(&mut conn).await? + 1;
         let mut rows = vec![];
         for row in text.split("\n") {
             if row.is_empty() {
@@ -81,16 +87,16 @@ impl List {
                 .zip(self.header.schema.columns.iter())
                 .map(|(value,column)|Cell::from_value(value, column))
                 .collect();
-            if let Some(row) = self.get_or_ignore_new_row(conn, &md5s, cells, next_row_num).await? {
+            if let Some(row) = self.get_or_ignore_new_row(&mut conn, &md5s, cells, next_row_num).await? {
                 next_row_num += 1;
                 md5s.insert(row.json_md5.to_owned());
                 rows.push(row);
                 if rows.len()>=ROW_INSERT_BATCH_SIZE {
-                    self.flush_row_insert(conn, &mut rows).await?;
+                    self.flush_row_insert(&mut conn, &mut rows).await?;
                 }
             }
         }
-        self.flush_row_insert(conn, &mut rows).await?;
+        self.flush_row_insert(&mut conn, &mut rows).await?;
         Ok(())
     }
 
@@ -120,7 +126,8 @@ impl List {
 
     /// Checks if a revision_id increase is necessary.
     /// Returns the new current revision_id (which might be unchanged).
-    pub async fn snapshot(&mut self, conn: &mut Conn) -> Result<DbId, GenericError> {
+    pub async fn snapshot(&mut self) -> Result<DbId, GenericError> {
+        let mut conn = self.app.get_gulp_conn().await?;
         // Check if there is a need to create a new snapshot, that is, increase the revision ID
         let sql = "SELECT count(id) FROM `row` WHERE list_id=:list_id AND revision_id=:revision_id" ;
         let list_id = self.id;

@@ -66,10 +66,10 @@ impl AppState {
         self.gulp_pool.get_conn().await
     }
 
-    pub async fn get_list(&self, list_id: DbId) -> Option<Arc<Mutex<List>>> {
+    pub async fn get_list(self: &Arc<AppState>, list_id: DbId) -> Option<Arc<Mutex<List>>> {
         if !self.lists.read().await.contains_key(&list_id) {
-            let mut conn = self.get_gulp_conn().await.ok()?;
-            let list = List::from_id(&mut conn, list_id).await?;
+            //let mut conn = self.get_gulp_conn().await.ok()?;
+            let list = List::from_id(self, list_id).await?;
             self.lists.write().await.entry(list_id).or_insert(Arc::new(Mutex::new(list)));
         }
         self.lists.read().await.get(&list_id).map(|x|x.clone())

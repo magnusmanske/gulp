@@ -134,12 +134,10 @@ async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
 async fn main() -> Result<(), GenericError> {
     let app = Arc::new(AppState::from_config_file("config.json").expect("app creation failed"));
 
-    let list = app.get_list(4).await.expect("List does not exists");
+    let list = AppState::get_list(&app,4).await.expect("List does not exists");
     let mut list = list.lock().await;
     println!("{list:?}");
-    // let _ = list.import_from_url(&mut conn,"https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",FileType::JSONL).await;
-    let mut conn = app.get_gulp_conn().await?;
-    let revision_id = list.snapshot(&mut conn).await?;
+    let revision_id = list.snapshot().await?;
     println!("{revision_id:?}");
 
     if false {
