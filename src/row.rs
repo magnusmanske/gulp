@@ -1,9 +1,11 @@
+use serde::{Deserialize, Serialize};
 use mysql_async::{prelude::*, Conn};
+use serde_json::json;
 use crate::header::*;
 use crate::cell::*;
 // use crate::GenericError;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Row {
     pub id: DbId,
     pub list_id: DbId,
@@ -70,6 +72,21 @@ impl Row {
 
     pub fn md5(s: &str) -> String {
         format!("{:x}",md5::compute(s))
+    }
+
+    pub fn as_json(&self, header: &Header) -> serde_json::Value {
+        let ret: Vec<serde_json::Value> = self
+            .cells
+            .iter()
+            .zip(header.schema.columns.iter())
+            .map(|(cell,column)|{
+                match cell {
+                    Some(c) => c.as_json(column),
+                    None => json!(null),
+                }
+            })
+            .collect();
+        json!(ret)
     }
 
 }

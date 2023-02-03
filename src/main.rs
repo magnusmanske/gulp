@@ -2,11 +2,13 @@ use clap::{Parser, Subcommand};
 use app_state::AppState;
 use axum::{
     routing::get,
-//    Json, 
+    Json, 
     Router,
     response::Html,
-//    extract::Path
+    extract::Path
 };
+use header::DbId;
+use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing;
@@ -32,6 +34,25 @@ async fn root(State(_state): State<Arc<AppState>>,) -> Html<String> {
     "##;
     Html(html.into())
 }
+
+async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>) -> Json<serde_json::Value> {
+    let list = match AppState::get_list(&state,id).await {
+        Some(list) => list,
+        None => return Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")})),
+    };
+    let list = list.lock().await;
+    //let revision_id = list.snapshot().await?;
+    //println!("{revision_id:?}");
+    //list.import_from_url("https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",list::FileType::JSONL).await?;
+    let rows = match list.get_rows_for_revision(list.revision_id).await {
+        Ok(rows) => rows,
+        Err(e) => return Json(json!({"status":e.to_string()})),
+    };
+    let rows: Vec<_> = rows.iter().map(|row|row.as_json(&list.header)).collect();
+    let j = json!({"status":"OK","rows":rows});
+    Json(j)
+}
+
 /*
 async fn item(Path((property,id)): Path<(String,String)>) -> Json<serde_json::Value> {
     let parser: Box<dyn ExternalImporter> = match Combinator::get_parser_for_property(&property, &id) {
@@ -108,8 +129,8 @@ async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
 
     let app = Router::new()
         .route("/", get(root))
-/*        .route("/supported_properties", get(supported_properties))
-        .route("/item/:prop/:id", get(item))
+        .route("/list/:id", get(list))
+/*        .route("/item/:prop/:id", get(item))
         .route("/meta_item/:prop/:id", get(meta_item))
         .route("/graph/:prop/:id", get(graph))
         .route("/extend/:item", get(extend)) */
@@ -160,9 +181,10 @@ async fn main() -> Result<(), GenericError> {
             //let revision_id = list.snapshot().await?;
             //println!("{revision_id:?}");
             //list.import_from_url("https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",list::FileType::JSONL).await?;
-            let rev0 = list.get_rows_for_revision(0).await?.len();
-            let rev1 = list.get_rows_for_revision(1).await?.len();
-            println!("{rev0} / {rev1}");        
+            let rev0 = list.get_rows_for_revision(0).await?;
+            let rev1 = list.get_rows_for_revision(1).await?;
+            let rev1_sub: Vec<_> = rev1.iter().filter(|row|row.row_num==5075).collect();
+            println!("{} / {} : {:#?}",rev0.len(),rev1.len(),rev1_sub);
         }
         None => {
             println!("Command required");
