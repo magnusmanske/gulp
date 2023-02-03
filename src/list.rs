@@ -47,10 +47,6 @@ impl List {
             .user_agent("gulp/0.1")
             .build()?;
         let text = client.get(url).send().await?.text().await?;
-        // let response = reqwest::get(url).await?;
-        // let text = response.text().await?;
-        // println!("{text}");
-        // TODO check response.status().is_success()
         let _ = match file_type {
             FileType::JSONL => self.import_jsonl(conn,&text).await?,
             _ => return Err("import_from_url: unsopported type {file_type}".into()),
@@ -86,7 +82,7 @@ impl List {
                 .zip(self.header.schema.columns.iter())
                 .map(|(value,column)|Cell::from_value(value, column))
                 .collect();
-            if let Some(row) = self.get_or_ignore_new_row(&md5s, cells, next_row_num).await? {
+            if let Some(row) = self.get_or_ignore_new_row(conn, &md5s, cells, next_row_num).await? {
                 next_row_num += 1;
                 md5s.insert(row.json_md5.to_owned());
                 rows.push(row);
@@ -103,22 +99,44 @@ impl List {
         if rows.is_empty() {
             return Ok(());
         }
-        let mut transaction = conn.start_transaction(mysql_async::TxOpts::default()).await?;
-        let sql = r#"REPLACE INTO `row` (list_id,row_num,revision_id,json_id) VALUES (:list_id,:row_num,:revision_id,:json)"#;
-        for row in rows.iter() {
+        let params: Vec<mysql_async::Params> = rows.iter().map(|row| {
             let list_id = row.list_id;
             let row_num = row.row_num;
             let revision_id = row.revision_id;
             let json = &row.json;
-            transaction.exec_drop(sql.to_owned(), params!{list_id,row_num,revision_id,json}).await?;
-        }
+            let json_md5 = &row.json_md5;
+            params!{list_id,row_num,revision_id,json,json_md5}
+        }).collect();
+        let sql = r#"INSERT INTO `row` (list_id,row_num,revision_id,json,json_md5) VALUES (:list_id,:row_num,:revision_id,:json,:json_md5)"#;
+        let tx_opts = mysql_async::TxOpts::default()
+            .with_consistent_snapshot(true)
+            .with_isolation_level(mysql_async::IsolationLevel::RepeatableRead)
+            .to_owned();
+        let mut transaction = conn.start_transaction(tx_opts).await?;
+        transaction.exec_batch(sql, params.iter()).await?;
         transaction.commit().await?;
-
         rows.clear();
         Ok(())
     }
 
-    async fn get_or_ignore_new_row(&self, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId) -> Result<Option<Row>, GenericError> {
+    async fn check_json_exists(&self, _conn: &mut Conn, _json_text: &str, _json_md5: &str) -> Result<bool, GenericError> {
+        // Already checked via md5, might have to implement if collisions occur
+        /*
+            let list_id = self.id;
+            println!("Checking {json_md5}");
+            let sql = "SELECT id FROM `row`
+                WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)
+                AND list_id=:list_id
+                AND json_md5=:json_md5
+                AND json=:json_text";
+            !conn
+                .exec_iter(sql,params! {list_id,json_text,json_md5}).await?
+                .map_and_drop(|_row| 1).await?.is_empty()
+         */
+        Ok(false)
+    }
+
+    async fn get_or_ignore_new_row(&self, conn: &mut Conn, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId) -> Result<Option<Row>, GenericError> {
         let cells2j: Vec<serde_json::Value> = cells
             .iter()
             .zip(self.header.schema.columns.iter())
@@ -129,9 +147,13 @@ impl List {
         let cells_json_text = cells_json.to_string();
         let json_md5 = Row::md5(&cells_json_text);
 
-        // match Row::row_exists_for_revision(conn, self.id, self.revision_id, &cells_json_text).await {
-        // Some(true) => {
-        if !md5s.contains(&json_md5) {
+        let json_exists = if md5s.contains(&json_md5) {
+            self.check_json_exists(conn, &cells_json_text,&json_md5).await?
+        } else {
+            false
+        };
+
+        if !json_exists {
             let new_row = Row{
                 id:0,
                 list_id: self.id,
@@ -149,12 +171,12 @@ impl List {
 
     async fn get_max_row_num(&self, conn: &mut Conn) -> Result<DbId, GenericError> {
         let list_id = self.id;
-        let sql = r#"SELECT max(row_num) FROM `row` 
+        let sql = r#"SELECT IFNULL(max(row_num),0) FROM `row` 
             WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)
             AND list_id=:list_id"#;
         let result: Vec<DbId> = conn
             .exec_iter(sql,params! {list_id}).await?
-            .map_and_drop(|row| row.get(0).expect("get_max_row_id")).await?;
+            .map_and_drop(|row| mysql_async::from_row::<DbId>(row)).await?;
         match result.get(0) {
             Some(result) => Ok(*result),
             None => Ok(0)
