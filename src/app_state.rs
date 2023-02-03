@@ -2,18 +2,20 @@ use std::env;
 use std::fs::File;
 use std::time::Duration;
 
-use my::{Conn,Opts,OptsBuilder,PoolConstraints,PoolOpts};
+use mysql_async::{Conn,Opts,OptsBuilder,PoolConstraints,PoolOpts};
 use serde_json::Value;
-//use configuration::Configuration;
-use mysql_async as my;
-use mysql_async::from_row;
-use mysql_async::prelude::*;
+// use configuration::Configuration;
+// use mysql_async::from_row;
+// use mysql_async::prelude::*;
 
 use crate::GenericError;
 
 #[derive(Debug, Clone)]
 pub struct AppState {
     gulp_pool: mysql_async::Pool,
+    _import_file_path: String,
+    _bot_name: String,
+    _bot_password: String,
 }
 
 impl AppState {
@@ -31,10 +33,9 @@ impl AppState {
         let ret = Self {
             gulp_pool: Self::create_pool(&config["gulp"]),
             // mnm_pool: Self::create_pool(&config["mixnmatch"]),
-            // import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
-            // bot_name: config["bot_name"].as_str().unwrap().to_string(),
-            // bot_password: config["bot_password"].as_str().unwrap().to_string(),
-            // max_concurrent_jobs: config["max_concurrent_jobs"].as_u64().unwrap_or(10) as usize,
+            _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
+            _bot_name: config["bot_name"].as_str().unwrap().to_string(),
+            _bot_password: config["bot_password"].as_str().unwrap().to_string(),
         };
         ret
     }

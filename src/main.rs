@@ -6,9 +6,9 @@ use axum::{
     response::Html,
 //    extract::Path
 };
+use std::env;
 //use serde_json::json;
 use std::net::SocketAddr;
-use std::env;
 use std::sync::Arc;
 use tracing;
 use tracing_subscriber;
@@ -19,9 +19,17 @@ use axum::{
     extract::State
 };
 
+use crate::list::FileType;
+
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 pub mod app_state;
+pub mod header;
+pub mod json;
+pub mod cell;
+pub mod row;
+pub mod list;
+
 
 async fn root(State(_state): State<Arc<AppState>>,) -> Html<String> {
     let html = r##"<h1>GULP</h1>
@@ -97,7 +105,7 @@ async fn supported_properties() -> Json<serde_json::Value> {
 }
  */
 
-async fn run_server(mut shared_state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
     tracing_subscriber::fmt::init();
 
     let cors = CorsLayer::new().allow_origin(Any);
@@ -119,16 +127,31 @@ async fn run_server(mut shared_state: Arc<AppState>) -> Result<(), Box<dyn std::
     Server::bind(&addr)
         .serve(app.into_make_service())
         .await
-        .unwrap();
+        .expect("Server error");
 
     Ok(())
 }
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), GenericError> {
     let app = Arc::new(AppState::from_config_file("config.json").expect("app creation failed"));
-    let argv: Vec<String> = env::args().collect();
-    match argv.get(1).map(|s|s.as_str()) {
-        _ => run_server(app).await?
+
+    let mut conn = app.get_gulp_conn().await?;
+    let list = list::List::from_id(&mut conn, 4).await.expect("List is None");
+    println!("{list:?}");
+    let result = list.import_from_url(&mut conn,"https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",FileType::JSONL).await;
+    println!("{result:?}");
+
+    if false {
+        let argv: Vec<String> = env::args().collect();
+        match argv.get(1).map(|s|s.as_str()) {
+            _ => run_server(app).await?
+        }
     }
+    
     Ok(())
 }
+
+
+/*
+ssh magnus@tools-login.wmflabs.org -L 3308:tools-db:3306 -N &
+*/
