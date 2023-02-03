@@ -1,3 +1,4 @@
+use axum::extract::Query;
 use clap::{Parser, Subcommand};
 use app_state::AppState;
 use axum::{
@@ -9,6 +10,7 @@ use axum::{
 };
 use header::DbId;
 use serde_json::json;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing;
@@ -35,7 +37,11 @@ async fn root(State(_state): State<Arc<AppState>>,) -> Html<String> {
     Html(html.into())
 }
 
-async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>) -> Json<serde_json::Value> {
+async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Json<serde_json::Value> {
+    let _format: String = match params.get("format") { // TODO use format
+        Some(s) => s.into(),
+        None => "json".into(),
+    };
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
         None => return Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")})),
