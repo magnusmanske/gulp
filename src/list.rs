@@ -119,17 +119,21 @@ impl List {
         Ok(())
     }
 
-    async fn check_json_exists(&self, conn: &mut Conn, json_text: &str, json_md5: &str) -> Result<bool, GenericError> {
-        let list_id = self.id;
-        println!("Checking {json_md5}");
-        let sql = "SELECT id FROM `row`
-            WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)
-            AND list_id=:list_id
-            AND json_md5=:json_md5
-            AND json=:json_text";
-        Ok(!conn
-            .exec_iter(sql,params! {list_id,json_text,json_md5}).await?
-            .map_and_drop(|_row| 1).await?.is_empty())
+    async fn check_json_exists(&self, _conn: &mut Conn, _json_text: &str, _json_md5: &str) -> Result<bool, GenericError> {
+        // Already checked via md5, might have to implement if collisions occur
+        /*
+            let list_id = self.id;
+            println!("Checking {json_md5}");
+            let sql = "SELECT id FROM `row`
+                WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)
+                AND list_id=:list_id
+                AND json_md5=:json_md5
+                AND json=:json_text";
+            Ok(!conn
+                .exec_iter(sql,params! {list_id,json_text,json_md5}).await?
+                .map_and_drop(|_row| 1).await?.is_empty())
+         */
+        Ok(true)
     }
 
     async fn get_or_ignore_new_row(&self, conn: &mut Conn, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId) -> Result<Option<Row>, GenericError> {
