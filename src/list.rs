@@ -133,7 +133,7 @@ impl List {
                 .exec_iter(sql,params! {list_id,json_text,json_md5}).await?
                 .map_and_drop(|_row| 1).await?.is_empty()
          */
-        Ok(false)
+        Ok(true)
     }
 
     async fn get_or_ignore_new_row(&self, conn: &mut Conn, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId) -> Result<Option<Row>, GenericError> {
