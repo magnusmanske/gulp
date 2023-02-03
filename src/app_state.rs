@@ -1,17 +1,23 @@
-use std::env;
+use std::{env, collections::HashMap};
 use std::fs::File;
 use std::time::Duration;
 
 use mysql_async::{Conn,Opts,OptsBuilder,PoolConstraints,PoolOpts};
 use serde_json::Value;
+use crate::{list::List, header::DbId};
+use tokio::sync::{Mutex, RwLock};
+use std::sync::Arc;
 // use configuration::Configuration;
 // use mysql_async::from_row;
 // use mysql_async::prelude::*;
 
 use crate::GenericError;
 
+type ListMutex = Arc<Mutex<List>>;
+
 #[derive(Debug, Clone)]
 pub struct AppState {
+    lists: Arc<RwLock<HashMap<DbId,ListMutex>>>,
     gulp_pool: mysql_async::Pool,
     _import_file_path: String,
     _bot_name: String,
@@ -31,6 +37,7 @@ impl AppState {
     /// Creatre an AppState object from a config JSON object
     pub fn from_config(config: &Value) -> Self {
         let ret = Self {
+            lists: Arc::new(RwLock::new(HashMap::new())),
             gulp_pool: Self::create_pool(&config["gulp"]),
             // mnm_pool: Self::create_pool(&config["mixnmatch"]),
             _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
@@ -57,5 +64,14 @@ impl AppState {
     /// Returns a connection to the GULP tool database
     pub async fn get_gulp_conn(&self) -> Result<Conn, mysql_async::Error> {
         self.gulp_pool.get_conn().await
+    }
+
+    pub async fn get_list(&self, list_id: DbId) -> Option<Arc<Mutex<List>>> {
+        if !self.lists.read().await.contains_key(&list_id) {
+            let mut conn = self.get_gulp_conn().await.ok()?;
+            let list = List::from_id(&mut conn, list_id).await?;
+            self.lists.write().await.entry(list_id).or_insert(Arc::new(Mutex::new(list)));
+        }
+        self.lists.read().await.get(&list_id).map(|x|x.clone())
     }
 }
