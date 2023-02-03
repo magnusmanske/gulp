@@ -47,6 +47,26 @@ impl List {
         })
     }
 
+    pub async fn get_rows_for_revision(&self, revision_id: DbId) -> Result<Vec<Row>, GenericError> {
+        self.get_rows_for_revision_paginated(revision_id, 0, None).await
+    }
+
+    pub async fn get_rows_for_revision_paginated(&self, revision_id: DbId, start: DbId, length: Option<DbId>) -> Result<Vec<Row>, GenericError> {
+        let length = length.unwrap_or(DbId::MAX);
+        let list_id = self.id ;
+        let sql = r#"SELECT id,list_id,row_num,revision_id,json,json_md5
+            FROM `row`
+            WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id AND revision_id<=:revision_id AND json_md5!='')
+            AND list_id=:list_id AND revision_id<=:revision_id AND json_md5!=''
+            ORDER BY row_num
+            LIMIT :length OFFSET :start"#;
+        let row_opts = self.app.get_gulp_conn().await?
+            .exec_iter(sql,params! {list_id,revision_id,start,length}).await?
+            .map_and_drop(|row| Row::from_row(&row,&self.header)).await?;
+        let rows: Vec<Row> = row_opts.iter().cloned().filter_map(|row|row).collect();
+        Ok(rows)
+    }
+
     pub async fn import_from_url(&self, url: &str, file_type: FileType) -> Result<(), GenericError> {
         let client = reqwest::Client::builder()
             .user_agent("gulp/0.1")

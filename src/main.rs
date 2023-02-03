@@ -1,3 +1,4 @@
+use clap::{Parser, Subcommand};
 use app_state::AppState;
 use axum::{
     routing::get,
@@ -6,8 +7,6 @@ use axum::{
     response::Html,
 //    extract::Path
 };
-use std::env;
-//use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing;
@@ -18,8 +17,6 @@ use axum::{
     Server,
     extract::State
 };
-
-//use crate::list::FileType;
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -130,23 +127,49 @@ async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
 
     Ok(())
 }
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    Server,
+    Test,
+}
+
+
+
 #[tokio::main]
 async fn main() -> Result<(), GenericError> {
+    let cli = Cli::parse();
+    // println!("{:?}",&cli.command);
+
     let app = Arc::new(AppState::from_config_file("config.json").expect("app creation failed"));
 
-    let list = AppState::get_list(&app,4).await.expect("List does not exists");
-    let mut list = list.lock().await;
-    println!("{list:?}");
-    let revision_id = list.snapshot().await?;
-    println!("{revision_id:?}");
-
-    if false {
-        let argv: Vec<String> = env::args().collect();
-        match argv.get(1).map(|s|s.as_str()) {
-            _ => run_server(app).await?
+    match &cli.command {
+        Some(Commands::Server) => {
+            run_server(app).await?;
+        }
+        Some(Commands::Test) => {
+            let list = AppState::get_list(&app,4).await.expect("List does not exists");
+            let list = list.lock().await;
+            //let revision_id = list.snapshot().await?;
+            //println!("{revision_id:?}");
+            //list.import_from_url("https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",list::FileType::JSONL).await?;
+            let rev0 = list.get_rows_for_revision(0).await?.len();
+            let rev1 = list.get_rows_for_revision(1).await?.len();
+            println!("{rev0} / {rev1}");        
+        }
+        None => {
+            println!("Command required");
         }
     }
-    
+
+
     Ok(())
 }
 

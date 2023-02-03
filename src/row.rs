@@ -27,7 +27,7 @@ impl Row {
     }
 
     pub fn from_row(row: &mysql_async::Row, header: &Header) -> Option<Self> {
-        let json: String = row.get(5)?;
+        let json: String = row.get(4)?;
         let json: serde_json::Value = serde_json::from_str(&json).ok()?;
         let cells = json
             .as_array()?
