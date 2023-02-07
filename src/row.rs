@@ -3,6 +3,7 @@ use mysql_async::{prelude::*, Conn};
 use serde_json::json;
 use crate::header::*;
 use crate::cell::*;
+//use datetime::LocalDateTime;
 // use crate::GenericError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -30,6 +31,10 @@ impl Row {
             .get(0)?.to_owned()
     }
 
+    fn get_timestamp_from_row(v: &mysql_async::Value) -> String {
+        v.as_sql(true).replace("'","")
+    }
+
     pub fn from_row(row: &mysql_async::Row, header: &Header) -> Option<Self> {
         let json: String = row.get(4)?;
         let json: serde_json::Value = serde_json::from_str(&json).ok()?;
@@ -47,7 +52,7 @@ impl Row {
             json: row.get(4)?,
             json_md5: row.get(5)?,
             user_id: row.get(6)?,
-            modified: row.get(7)?,
+            modified: Self::get_timestamp_from_row(&row.get(7)?),
             cells,
         })
     }
@@ -99,14 +104,41 @@ impl Row {
         json!(ret)
     }
 
+    pub fn as_tsv(&self, header: &Header) -> String {
+        let ret: Vec<String> = self
+            .cells
+            .iter()
+            .zip(header.schema.columns.iter())
+            .map(|(cell,column)|{
+                match cell {
+                    Some(c) => c.as_tsv(column),
+                    None => String::new(),
+                }
+            })
+            .collect();
+        format!("{}\t{}",self.row_num,ret.join("\t"))
+    }
+
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app_state::*;
 
     #[test]
     fn test_md5() {
         assert_eq!(Row::md5("hello world"),"5eb63bbbe01eeed093cb22bb8f5acdc3".to_string());
+    }
+
+    #[tokio::test]
+    async fn test_from_db() {
+        let app = AppState::from_config_file("config.json").expect("app creation failed");
+        let mut conn = app.get_gulp_conn().await.unwrap();
+        let header = Header::from_list_id(&mut conn,4).await.unwrap();
+        let row = Row::from_db(&mut conn,4,1,1,&header).await.unwrap();
+        assert_eq!(row.id,1);
+        assert_eq!(row.json,"[\"Q111028176\",\"Buergerwehrbrunnen Bensheim.jpg\"]");
+        assert_eq!(row.cells.len(),2);
     }
 }

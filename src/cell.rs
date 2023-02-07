@@ -17,6 +17,14 @@ impl WikiPage {
             json!(self) // Long version
         }
     }
+
+    pub fn as_tsv(&self, column: &HeaderColumn) -> String {
+        if self.wiki==column.wiki && self.namespace_id==column.namespace_id {
+            self.title.to_owned()
+        } else {
+            format!("{:?}:{:?}:{}",&self.wiki,&self.namespace_id,&self.title)
+        }
+    }
 }
 
 
@@ -59,6 +67,13 @@ impl Cell {
         match self {
             Cell::String(s) => json!(s),
             Cell::WikiPage(wp) => wp.as_json(column),
+        }
+    }
+
+    pub fn as_tsv(&self, column: &HeaderColumn) -> String {
+        match self {
+            Cell::String(s) => s.to_owned(),
+            Cell::WikiPage(wp) => wp.as_tsv(column),
         }
     }
 }

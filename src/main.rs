@@ -50,16 +50,22 @@ async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(pa
     };
     let list = list.lock().await;
     //let revision_id = list.snapshot().await?;
-    //println!("{revision_id:?}");
     //list.import_from_url("https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",list::FileType::JSONL).await?;
     let rows = match list.get_rows_for_revision(list.revision_id).await {
         Ok(rows) => rows,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
     };
-    let rows: Vec<_> = rows.iter().map(|row|row.as_json(&list.header)).collect();
+    
     match format.as_str() {
+        "tsv" => {
+            // TODO header
+            let rows: Vec<String> = rows.iter().map(|row|row.as_tsv(&list.header)).collect();
+            let s = rows.join("\n");
+            (StatusCode::OK, s).into_response()
+        }
         _ => {
-            let j = json!({"status":"OK","rows":rows});
+            let rows: Vec<serde_json::Value> = rows.iter().map(|row|row.as_json(&list.header)).collect();
+            let j = json!({"status":"OK","rows":rows}); // TODO header
             (StatusCode::OK, Json(j)).into_response()        
         }
     }

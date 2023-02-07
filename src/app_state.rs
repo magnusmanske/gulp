@@ -71,7 +71,6 @@ impl AppState {
             let list = List::from_id(self, list_id).await?;
             self.lists.write().await.entry(list_id).or_insert(Arc::new(Mutex::new(list)));
         }
-        println!("{:?}",self.lists.read().await.keys());
         self.lists.read().await.get(&list_id).map(|x|x.clone())
     }
 }

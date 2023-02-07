@@ -54,10 +54,10 @@ impl List {
     pub async fn get_rows_for_revision_paginated(&self, revision_id: DbId, start: DbId, length: Option<DbId>) -> Result<Vec<Row>, GenericError> {
         let length = length.unwrap_or(DbId::MAX);
         let list_id = self.id ;
-        let sql = r#"SELECT id,list_id,row_num,revision_id,json,json_md5
+        let sql = r#"SELECT row.id,list_id,row_num,revision_id,json,json_md5,user_id,modified
             FROM `row`
-            WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id AND revision_id<=:revision_id AND json_md5!='')
-            AND list_id=:list_id AND revision_id<=:revision_id AND json_md5!=''
+            WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id AND revision_id<=:revision_id)
+            AND list_id=:list_id AND revision_id<=:revision_id
             ORDER BY row_num
             LIMIT :length OFFSET :start"#;
         let row_opts = self.app.get_gulp_conn().await?
@@ -174,7 +174,6 @@ impl List {
         // Already checked via md5, might have to implement if collisions occur
         /*
             let list_id = self.id;
-            // println!("Checking {json_md5}");
             let sql = "SELECT id FROM `row`
                 WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)
                 AND list_id=:list_id
