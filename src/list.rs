@@ -93,6 +93,7 @@ impl List {
     }
 
     async fn import_jsonl(&self, text: &str, user_id: DbId) -> Result<(), GenericError> {
+        // TODO delete rows?
         let mut conn = self.app.get_gulp_conn().await?;
         let mut md5s = self.load_json_md5s(&mut conn).await?;
         let mut next_row_num = self.get_max_row_num(&mut conn).await? + 1;
