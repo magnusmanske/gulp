@@ -36,8 +36,8 @@ use axum::{
 };
 use http::{ request::Parts};
 use oauth2::{
-    basic::BasicClient, reqwest::async_http_client, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, RedirectUrl, Scope, TokenResponse, TokenUrl,
+    reqwest::async_http_client, AuthorizationCode, CsrfToken, TokenResponse, 
+//    basic::BasicClient,  AuthUrl, ClientId, ClientSecret, RedirectUrl, Scope, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 //use std::{env};
@@ -54,14 +54,34 @@ pub mod header;
 pub mod cell;
 pub mod row;
 pub mod list;
+async fn get_user(state: &Arc<AppState>,cookies: &headers::Cookie) -> Option<String> {
+    let cookie = cookies.get(COOKIE_NAME).unwrap();
+    match state.store.load_session(cookie.to_string()).await.unwrap() {
+        Some(session) => {
+            let user_opt: Option<User> = session.get("user");
+            Some(user_opt?.username)
+        }
+        None => None
+    }
+}
 
+fn user_box(user: &Option<String>) -> String {
+    let ret = match user {
+        Some(username) => format!("Welcome, {username}!"),
+        None => "<a href='/auth/login'>Log in</a>".to_string()
+    };
+    format!("<div style='float:right;'>{ret}</div>")
+}
 
-async fn root(State(_state): State<Arc<AppState>>,) -> Html<String> {
-    let html = r##"<h1>GULP</h1>
+async fn root(State(state): State<Arc<AppState>>,TypedHeader(cookies): TypedHeader<headers::Cookie>,) -> Response {
+    let user = get_user(&state,&cookies).await;
+
+    let html = r##"__USERBOX__
+    <h1>GULP</h1>
     <p>General Unified List Processor</p>
-    <a href='/auth/login'>login</a>
     "##;
-    Html(html.into())
+    let html = html.replace("__USERBOX__",&user_box(&user));
+    Html(html).into_response()
 }
 
 async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
@@ -181,15 +201,19 @@ async fn main() -> Result<(), GenericError> {
 
 
 // The user data we'll get back from toolforge.
-// https://toolforge.com/developers/docs/resources/user#user-object-user-structure
 #[derive(Debug, Serialize, Deserialize)]
 struct User {
-    id: String,
-    avatar: Option<String>,
-    username: String,
-    discriminator: String,
+    pub username: String,
+    realname: String,
+    email: String,
+    editcount: u64,
+    confirmed_email: bool,
+    blocked: bool,
+    groups: Vec<String>,
+    rights: Vec<String>,
+    grants: Vec<String>,
 }
-
+/*
 // Session is optional
 async fn index(user: Option<User>) -> impl IntoResponse {
     match user {
@@ -200,7 +224,7 @@ async fn index(user: Option<User>) -> impl IntoResponse {
         None => "You're not logged in.\nVisit `/auth/login` to do so.".to_string(),
     }
 }
-
+ */
 async fn toolforge_auth(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let (auth_url, _csrf_token) = state.oauth_client
         .authorize_url(CsrfToken::new_random)
@@ -210,7 +234,7 @@ async fn toolforge_auth(State(state): State<Arc<AppState>>) -> impl IntoResponse
     // Redirect to toolforge's oauth service
     Redirect::to(auth_url.as_ref())
 }
-
+/*
 // Valid user session required. If there is none, redirect to the auth page
 async fn protected(State(state): State<Arc<AppState>>, user: User) -> impl IntoResponse {
     format!(
@@ -218,7 +242,7 @@ async fn protected(State(state): State<Arc<AppState>>, user: User) -> impl IntoR
         user
     )
 }
-
+ */
 async fn logout(
     State(state): State<Arc<AppState>>,
     TypedHeader(cookies): TypedHeader<headers::Cookie>,
@@ -255,17 +279,17 @@ async fn login_authorized(
 
     // Fetch user data from toolforge
     let client = reqwest::Client::new();
-    let user_data: User = client
-        .get("https://meta.wikimedia.org/w/rest.php/oauth2/access_token")
+    let user_data = client
+        .get("https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile")
         .bearer_auth(token.access_token().secret())
         .send()
         .await
-        .unwrap()
+        .unwrap();
+
+    let user_data: User = user_data
         .json::<User>()
         .await
         .unwrap();
-
-    println!("{:?}",&user_data);
 
     // Create a new session filled with user data
     let mut session = Session::new();

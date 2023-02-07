@@ -44,7 +44,7 @@ impl AppState {
         let client_id = config["consumer_token"].as_str().unwrap().to_string();
         let client_secret = config["secret_token"].as_str().unwrap().to_string();
         let auth_url = "https://meta.wikimedia.org/w/rest.php/oauth2/authorize?response_type=code";
-        let token_url = "https://meta.wikimedia.org/w/rest.php/oauth2/token";
+        let token_url = "https://meta.wikimedia.org/w/rest.php/oauth2/access_token";
         let redirect_url = "https://gulp.toolforge.org/auth/authorized" ;
 
         let oauth_client = BasicClient::new(
