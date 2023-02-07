@@ -2,7 +2,10 @@ use std::{env, collections::HashMap};
 use std::fs::File;
 use std::time::Duration;
 
+use async_session::MemoryStore;
 use mysql_async::{Conn,Opts,OptsBuilder,PoolConstraints,PoolOpts};
+use oauth2::{AuthUrl, ClientId, ClientSecret, TokenUrl, RedirectUrl};
+use oauth2::basic::BasicClient;
 use serde_json::Value;
 use crate::{list::List, header::DbId};
 use tokio::sync::{Mutex, RwLock};
@@ -20,10 +23,10 @@ pub struct AppState {
     lists: Arc<RwLock<HashMap<DbId,ListMutex>>>,
     gulp_pool: mysql_async::Pool,
     _import_file_path: String,
-    _bot_name: String,
-    _bot_password: String,
-    consumer_token: String,
-    secret_token: String,
+    pub consumer_token: String,
+    pub secret_token: String,
+    pub store: MemoryStore,
+    pub oauth_client: BasicClient,
 }
 
 impl AppState {
@@ -38,15 +41,29 @@ impl AppState {
 
     /// Creatre an AppState object from a config JSON object
     pub fn from_config(config: &Value) -> Self {
+        let client_id = config["consumer_token"].as_str().unwrap().to_string();
+        let client_secret = config["secret_token"].as_str().unwrap().to_string();
+        let auth_url = "https://meta.wikimedia.org/w/rest.php/oauth2/authorize?response_type=code";
+        let token_url = "https://meta.wikimedia.org/w/rest.php/oauth2/token";
+        let redirect_url = "https://gulp.toolforge.org/auth/authorized" ;
+
+        let oauth_client = BasicClient::new(
+            ClientId::new(client_id),
+            Some(ClientSecret::new(client_secret)),
+            AuthUrl::new(auth_url.to_string()).unwrap(),
+            Some(TokenUrl::new(token_url.to_string()).unwrap()),
+        )
+        .set_redirect_uri(RedirectUrl::new(redirect_url.to_string()).unwrap());
+
         let ret = Self {
             lists: Arc::new(RwLock::new(HashMap::new())),
             gulp_pool: Self::create_pool(&config["gulp"]),
             // mnm_pool: Self::create_pool(&config["mixnmatch"]),
             _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
-            _bot_name: config["bot_name"].as_str().unwrap().to_string(),
-            _bot_password: config["bot_password"].as_str().unwrap().to_string(),
             consumer_token: config["consumer_token"].as_str().unwrap().to_string(),
             secret_token: config["secret_token"].as_str().unwrap().to_string(),
+            store: MemoryStore::new(),
+            oauth_client,
         };
         ret
     }

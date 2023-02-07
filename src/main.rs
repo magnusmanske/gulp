@@ -1,4 +1,3 @@
-use axum::extract::Query;
 use clap::{Parser, Subcommand};
 use app_state::AppState;
 use axum::{
@@ -8,7 +7,6 @@ use axum::{
     response::Html,
     extract::Path,
     http::StatusCode,
-    response::{IntoResponse, Response},
 };
 use header::DbId;
 use serde_json::json;
@@ -21,12 +19,33 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use axum::{
     Server,
-    extract::State
+    extract::State,
+    extract::Query
 };
+
+
+use async_session::{MemoryStore, Session, SessionStore};
+use axum::{
+    async_trait,
+    extract::{
+        rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts, TypedHeader,
+    },
+    http::{header::SET_COOKIE, HeaderMap},
+    response::{IntoResponse, Redirect, Response},
+    RequestPartsExt,
+};
+use http::{ request::Parts};
 use oauth2::{
     basic::BasicClient, reqwest::async_http_client, AuthUrl, AuthorizationCode, ClientId,
     ClientSecret, CsrfToken, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
+use serde::{Deserialize, Serialize};
+//use std::{env};
+//use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+static COOKIE_NAME: &str = "SESSION";
+
+
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -39,6 +58,8 @@ pub mod list;
 
 async fn root(State(_state): State<Arc<AppState>>,) -> Html<String> {
     let html = r##"<h1>GULP</h1>
+    <p>General Unified List Processor</p>
+    <a href='/auth/login'>login</a>
     "##;
     Html(html.into())
 }
@@ -75,117 +96,6 @@ async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(pa
     }
 }
 
-/*
-async fn item(Path((property,id)): Path<(String,String)>) -> Json<serde_json::Value> {
-    let parser: Box<dyn ExternalImporter> = match Combinator::get_parser_for_property(&property, &id) {
-        Ok(parser) => parser,
-        Err(e) => return Json(json!({"status":e.to_string()}))
-    };
-    let mi = match parser.run() {
-        Ok(mi) => mi,
-        Err(e) => return Json(json!({"status":e.to_string()}))
-    };
-    let mut j = json!(mi)["item"].to_owned();
-    j["status"] = json!("OK");
-    Json(j)
-}
-
-async fn meta_item(Path((property,id)): Path<(String,String)>) -> Json<serde_json::Value> {
-    let parser: Box<dyn ExternalImporter> = match Combinator::get_parser_for_property(&property, &id) {
-        Ok(parser) => parser,
-        Err(e) => return Json(json!({"status":e.to_string()}))
-    };
-    let mi = match parser.run() {
-        Ok(mi) => mi,
-        Err(e) => return Json(json!({"status":e.to_string()}))
-    };
-    let mut j = json!(mi);
-    j["status"] = json!("OK");
-    Json(j)
-}
-
-async fn graph(Path((property,id)): Path<(String,String)>) -> String {
-    let mut parser: Box<dyn ExternalImporter> = match Combinator::get_parser_for_property(&property, &id) {
-        Ok(parser) => parser,
-        Err(e) => return e.to_string()
-    };
-    parser.get_graph_text()
-}
-
-async fn extend(Path(item): Path<String>) -> Json<serde_json::Value> {
-    let mut base_item = match meta_item::MetaItem::from_entity(&item).await {
-        Ok(base_item) => base_item,
-        Err(e) => return Json(json!({"status":e.to_string()}))
-    };
-    let ext_ids: Vec<ExternalId> = base_item
-        .get_external_ids()
-        .iter()
-        .filter(|ext_id|Combinator::get_parser_for_ext_id(ext_id).ok().is_some())
-        .cloned()
-        .collect();
-    let mut combinator = Combinator::new();
-    if let Err(e) = combinator.import(ext_ids) {
-        return Json(json!({"status":e.to_string()}))
-    }
-    let other = match combinator.combine() {
-        Some(other) => other,
-        None => return Json(json!({"status":"No items to combine"}))
-    };
-    let diff = base_item.merge(&other);
-    Json(json!(diff))
-}
-
-async fn supported_properties() -> Json<serde_json::Value> {
-    let ret: Vec<String> = Combinator::get_supported_properties()
-        .iter()
-        .map(|prop|format!("P{prop}"))
-        .collect();
-        Json(json!(ret))
-}
- */
-
- async fn login_authorized(
-    Query(query): Query<AuthRequest>,
-    State(store): State<MemoryStore>,
-    State(oauth_client): State<BasicClient>,
-) -> impl IntoResponse {
-    // Get an auth token
-    let token = oauth_client
-        .exchange_code(AuthorizationCode::new(query.code.clone()))
-        .request_async(async_http_client)
-        .await
-        .unwrap();
-
-    // Fetch user data from discord
-    let client = reqwest::Client::new();
-    let user_data: User = client
-        // https://discord.com/developers/docs/resources/user#get-current-user
-        .get("https://discordapp.com/api/users/@me")
-        .bearer_auth(token.access_token().secret())
-        .send()
-        .await
-        .unwrap()
-        .json::<User>()
-        .await
-        .unwrap();
-
-    // Create a new session filled with user data
-    let mut session = Session::new();
-    session.insert("user", &user_data).unwrap();
-
-    // Store session and get corresponding cookie
-    let cookie = store.store_session(session).await.unwrap().unwrap();
-
-    // Build the cookie
-    let cookie = format!("{}={}; SameSite=Lax; Path=/", COOKIE_NAME, cookie);
-
-    // Set cookie
-    let mut headers = HeaderMap::new();
-    headers.insert(SET_COOKIE, cookie.parse().unwrap());
-
-    (headers, Redirect::to("/"))
-}
-
 
 async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
     tracing_subscriber::fmt::init();
@@ -194,8 +104,15 @@ async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
 
     let app = Router::new()
         .route("/", get(root))
+        //.route("/auth/login", get(auth_login))
         .route("/list/:id", get(list))
-        .route("/auth/authorized", login_authorized())
+
+        .route("/auth/login", get(toolforge_auth))
+        .route("/auth/authorized", get(login_authorized))
+        //.route("/protected", get(protected))
+        .route("/logout", get(logout))
+
+        //.route("/auth/authorized", login_authorized())
 /*        .route("/meta_item/:prop/:id", get(meta_item))
         .route("/graph/:prop/:id", get(graph))
         .route("/extend/:item", get(extend)) */
@@ -258,6 +175,157 @@ async fn main() -> Result<(), GenericError> {
 
 
     Ok(())
+}
+
+
+
+
+// The user data we'll get back from toolforge.
+// https://toolforge.com/developers/docs/resources/user#user-object-user-structure
+#[derive(Debug, Serialize, Deserialize)]
+struct User {
+    id: String,
+    avatar: Option<String>,
+    username: String,
+    discriminator: String,
+}
+
+// Session is optional
+async fn index(user: Option<User>) -> impl IntoResponse {
+    match user {
+        Some(u) => format!(
+            "Hey {}! You're logged in!\nYou may now access `/protected`.\nLog out with `/logout`.",
+            u.username
+        ),
+        None => "You're not logged in.\nVisit `/auth/login` to do so.".to_string(),
+    }
+}
+
+async fn toolforge_auth(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let (auth_url, _csrf_token) = state.oauth_client
+        .authorize_url(CsrfToken::new_random)
+        //.add_scope(Scope::new("identify".to_string()))
+        .url();
+
+    // Redirect to toolforge's oauth service
+    Redirect::to(auth_url.as_ref())
+}
+
+// Valid user session required. If there is none, redirect to the auth page
+async fn protected(State(state): State<Arc<AppState>>, user: User) -> impl IntoResponse {
+    format!(
+        "Welcome to the protected area :)\nHere's your info:\n{:?}",
+        user
+    )
+}
+
+async fn logout(
+    State(state): State<Arc<AppState>>,
+    TypedHeader(cookies): TypedHeader<headers::Cookie>,
+) -> impl IntoResponse {
+    let cookie = cookies.get(COOKIE_NAME).unwrap();
+    let session = match state.store.load_session(cookie.to_string()).await.unwrap() {
+        Some(s) => s,
+        // No session active, just redirect
+        None => return Redirect::to("/"),
+    };
+
+    state.store.destroy_session(session).await.unwrap();
+
+    Redirect::to("/")
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct AuthRequest {
+    code: String,
+    state: String,
+}
+
+async fn login_authorized(
+    Query(query): Query<AuthRequest>,
+    State(state): State<Arc<AppState>>
+) -> impl IntoResponse {
+    // Get an auth token
+    let token = state.oauth_client
+        .exchange_code(AuthorizationCode::new(query.code.clone()))
+        .request_async(async_http_client)
+        .await
+        .unwrap();
+
+    // Fetch user data from toolforge
+    let client = reqwest::Client::new();
+    let user_data: User = client
+        .get("https://meta.wikimedia.org/w/rest.php/oauth2/access_token")
+        .bearer_auth(token.access_token().secret())
+        .send()
+        .await
+        .unwrap()
+        .json::<User>()
+        .await
+        .unwrap();
+
+    println!("{:?}",&user_data);
+
+    // Create a new session filled with user data
+    let mut session = Session::new();
+    session.insert("user", &user_data).unwrap();
+
+    // Store session and get corresponding cookie
+    let cookie = state.store.store_session(session).await.unwrap().unwrap();
+
+    // Build the cookie
+    let cookie = format!("{}={}; SameSite=Lax; Path=/", COOKIE_NAME, cookie);
+
+    // Set cookie
+    let mut headers = HeaderMap::new();
+    headers.insert(SET_COOKIE, cookie.parse().unwrap());
+
+    (headers, Redirect::to("/"))
+}
+
+struct AuthRedirect;
+
+impl IntoResponse for AuthRedirect {
+    fn into_response(self) -> Response {
+        Redirect::temporary("/auth/login").into_response()
+    }
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for User
+where
+    MemoryStore: FromRef<S>,
+    S: Send + Sync,
+{
+    // If anything goes wrong or no session is found, redirect to the auth page
+    type Rejection = AuthRedirect;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let store = MemoryStore::from_ref(state);
+
+        let cookies = parts
+            .extract::<TypedHeader<headers::Cookie>>()
+            .await
+            .map_err(|e| match *e.name() {
+                http::header::COOKIE => match e.reason() {
+                    TypedHeaderRejectionReason::Missing => AuthRedirect,
+                    _ => panic!("unexpected error getting Cookie header(s): {}", e),
+                },
+                _ => panic!("unexpected error getting cookies: {}", e),
+            })?;
+        let session_cookie = cookies.get(COOKIE_NAME).ok_or(AuthRedirect)?;
+
+        let session = store
+            .load_session(session_cookie.to_string())
+            .await
+            .unwrap()
+            .ok_or(AuthRedirect)?;
+
+        let user = session.get::<User>("user").ok_or(AuthRedirect)?;
+
+        Ok(user)
+    }
 }
 
 
