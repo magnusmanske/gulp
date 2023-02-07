@@ -55,7 +55,11 @@ pub mod cell;
 pub mod row;
 pub mod list;
 
-async fn get_user(state: &Arc<AppState>,cookies: &headers::Cookie) -> Option<String> {
+async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<String> {
+    let cookies = match cookies {
+        Some(cookies) => cookies,
+        None => return None,
+    };
     let cookie = cookies.get(COOKIE_NAME).unwrap();
     match state.store.load_session(cookie.to_string()).await.unwrap() {
         Some(session) => {
@@ -74,7 +78,7 @@ fn user_box(user: &Option<String>) -> String {
     format!("<div style='float:right;'>{ret}</div>")
 }
 
-async fn root(State(state): State<Arc<AppState>>,TypedHeader(cookies): TypedHeader<headers::Cookie>,) -> Response {
+async fn root(State(state): State<Arc<AppState>>,cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let user = get_user(&state,&cookies).await;
 
     let html = r##"__USERBOX__
