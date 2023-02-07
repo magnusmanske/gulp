@@ -22,6 +22,8 @@ pub struct AppState {
     _import_file_path: String,
     _bot_name: String,
     _bot_password: String,
+    consumer_token: String,
+    secret_token: String,
 }
 
 impl AppState {
@@ -43,6 +45,8 @@ impl AppState {
             _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
             _bot_name: config["bot_name"].as_str().unwrap().to_string(),
             _bot_password: config["bot_password"].as_str().unwrap().to_string(),
+            consumer_token: config["consumer_token"].as_str().unwrap().to_string(),
+            secret_token: config["secret_token"].as_str().unwrap().to_string(),
         };
         ret
     }

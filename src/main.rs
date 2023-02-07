@@ -23,6 +23,10 @@ use axum::{
     Server,
     extract::State
 };
+use oauth2::{
+    basic::BasicClient, reqwest::async_http_client, AuthUrl, AuthorizationCode, ClientId,
+    ClientSecret, CsrfToken, RedirectUrl, Scope, TokenResponse, TokenUrl,
+};
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -140,6 +144,49 @@ async fn supported_properties() -> Json<serde_json::Value> {
 }
  */
 
+ async fn login_authorized(
+    Query(query): Query<AuthRequest>,
+    State(store): State<MemoryStore>,
+    State(oauth_client): State<BasicClient>,
+) -> impl IntoResponse {
+    // Get an auth token
+    let token = oauth_client
+        .exchange_code(AuthorizationCode::new(query.code.clone()))
+        .request_async(async_http_client)
+        .await
+        .unwrap();
+
+    // Fetch user data from discord
+    let client = reqwest::Client::new();
+    let user_data: User = client
+        // https://discord.com/developers/docs/resources/user#get-current-user
+        .get("https://discordapp.com/api/users/@me")
+        .bearer_auth(token.access_token().secret())
+        .send()
+        .await
+        .unwrap()
+        .json::<User>()
+        .await
+        .unwrap();
+
+    // Create a new session filled with user data
+    let mut session = Session::new();
+    session.insert("user", &user_data).unwrap();
+
+    // Store session and get corresponding cookie
+    let cookie = store.store_session(session).await.unwrap().unwrap();
+
+    // Build the cookie
+    let cookie = format!("{}={}; SameSite=Lax; Path=/", COOKIE_NAME, cookie);
+
+    // Set cookie
+    let mut headers = HeaderMap::new();
+    headers.insert(SET_COOKIE, cookie.parse().unwrap());
+
+    (headers, Redirect::to("/"))
+}
+
+
 async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
     tracing_subscriber::fmt::init();
 
@@ -148,8 +195,8 @@ async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
     let app = Router::new()
         .route("/", get(root))
         .route("/list/:id", get(list))
-/*        .route("/item/:prop/:id", get(item))
-        .route("/meta_item/:prop/:id", get(meta_item))
+        .route("/auth/authorized", login_authorized())
+/*        .route("/meta_item/:prop/:id", get(meta_item))
         .route("/graph/:prop/:id", get(graph))
         .route("/extend/:item", get(extend)) */
         .with_state(shared_state)
