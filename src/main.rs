@@ -6,7 +6,9 @@ use axum::{
     Json, 
     Router,
     response::Html,
-    extract::Path
+    extract::Path,
+    http::StatusCode,
+    response::{IntoResponse, Response},
 };
 use header::DbId;
 use serde_json::json;
@@ -37,14 +39,14 @@ async fn root(State(_state): State<Arc<AppState>>,) -> Html<String> {
     Html(html.into())
 }
 
-async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Json<serde_json::Value> {
-    let _format: String = match params.get("format") { // TODO use format
+async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
+    let format: String = match params.get("format") { // TODO use format
         Some(s) => s.into(),
         None => "json".into(),
     };
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
-        None => return Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")})),
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
     };
     let list = list.lock().await;
     //let revision_id = list.snapshot().await?;
@@ -52,11 +54,15 @@ async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(pa
     //list.import_from_url("https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",list::FileType::JSONL).await?;
     let rows = match list.get_rows_for_revision(list.revision_id).await {
         Ok(rows) => rows,
-        Err(e) => return Json(json!({"status":e.to_string()})),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
     };
     let rows: Vec<_> = rows.iter().map(|row|row.as_json(&list.header)).collect();
-    let j = json!({"status":"OK","rows":rows});
-    Json(j)
+    match format.as_str() {
+        _ => {
+            let j = json!({"status":"OK","rows":rows});
+            (StatusCode::OK, Json(j)).into_response()        
+        }
+    }
 }
 
 /*

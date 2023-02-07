@@ -68,12 +68,13 @@ impl List {
     }
 
     pub async fn import_from_url(&self, url: &str, file_type: FileType) -> Result<(), GenericError> {
+        let user_id = 1; // TODO FIXME
         let client = reqwest::Client::builder()
             .user_agent("gulp/0.1")
             .build()?;
         let text = client.get(url).send().await?.text().await?;
         let _ = match file_type {
-            FileType::JSONL => self.import_jsonl(&text).await?,
+            FileType::JSONL => self.import_jsonl(&text, user_id).await?,
             _ => return Err("import_from_url: unsopported type {file_type}".into()),
         };
         Ok(())
@@ -91,7 +92,7 @@ impl List {
         Ok(ret)
     }
 
-    async fn import_jsonl(&self, text: &str) -> Result<(), GenericError> {
+    async fn import_jsonl(&self, text: &str, user_id: DbId) -> Result<(), GenericError> {
         let mut conn = self.app.get_gulp_conn().await?;
         let mut md5s = self.load_json_md5s(&mut conn).await?;
         let mut next_row_num = self.get_max_row_num(&mut conn).await? + 1;
@@ -107,7 +108,7 @@ impl List {
                 .zip(self.header.schema.columns.iter())
                 .map(|(value,column)|Cell::from_value(value, column))
                 .collect();
-            if let Some(row) = self.get_or_ignore_new_row(&mut conn, &md5s, cells, next_row_num).await? {
+            if let Some(row) = self.get_or_ignore_new_row(&mut conn, &md5s, cells, next_row_num, user_id).await? {
                 next_row_num += 1;
                 md5s.insert(row.json_md5.to_owned());
                 rows.push(row);
@@ -186,7 +187,7 @@ impl List {
         Ok(true)
     }
 
-    async fn get_or_ignore_new_row(&self, conn: &mut Conn, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId) -> Result<Option<Row>, GenericError> {
+    async fn get_or_ignore_new_row(&self, conn: &mut Conn, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId, user_id: DbId) -> Result<Option<Row>, GenericError> {
         let cells2j: Vec<serde_json::Value> = cells
             .iter()
             .zip(self.header.schema.columns.iter())
@@ -211,6 +212,8 @@ impl List {
                 revision_id: self.revision_id, 
                 json: cells_json_text.to_owned(), 
                 json_md5,
+                user_id,
+                modified: String::new(),
                 cells,
             };
             return Ok(Some(new_row));

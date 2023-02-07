@@ -13,12 +13,14 @@ pub struct Row {
     pub revision_id: DbId,
     pub json: String,
     pub json_md5: String,
+    pub user_id: DbId,
+    pub modified: String,
     pub cells: Vec<Option<Cell>>,
 }
 
 impl Row {
     pub async fn from_db(conn: &mut Conn, list_id: DbId, row_num: DbId, revision_id: DbId, header: &Header) -> Option<Self> {
-        let sql = r#"SELECT row.id,list_id,row_num,revision_id,json,json_md5
+        let sql = r#"SELECT row.id,list_id,row_num,revision_id,json,json_md5,user_id,modified
             FROM `row`
             WHERE list_id=:list_id AND row_num=:row_num AND revision_id<=:revision_id
             ORDER BY revision_id DESC LIMIT 1"#;
@@ -44,6 +46,8 @@ impl Row {
             revision_id: row.get(3)?,
             json: row.get(4)?,
             json_md5: row.get(5)?,
+            user_id: row.get(6)?,
+            modified: row.get(7)?,
             cells,
         })
     }
@@ -59,8 +63,8 @@ impl Row {
             .map_and_drop(|_row| 1).await.ok()?.is_empty())
     }
 /*
-    pub async fn insert_new(&mut self, conn: &mut conn) -> Result<(), GenericError> {
-        let sql = r#"REPLACE INTO `row` (list_id,row_num,revision_id,json_id) VALUES (:list_id,:row_num,:revision_id,:json)"#;
+    pub async fn insert_new(&mut self, conn: &mut conn, user_id: DbId) -> Result<(), GenericError> {
+        let sql = r#"REPLACE INTO `row` (list_id,row_num,revision_id,json_id,user_id) VALUES (:list_id,:row_num,:revision_id,:json,:user_id)"#;
         let list_id = self.list_id;
         let row_num = self.row_num;
         let revision_id = self.revision_id;
@@ -86,6 +90,12 @@ impl Row {
                 }
             })
             .collect();
+        let ret = json!({
+            "row": self.row_num,
+            "modified": self.modified,
+            "user": self.user_id,
+            "c":ret,
+        });
         json!(ret)
     }
 

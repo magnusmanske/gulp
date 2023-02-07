@@ -68,10 +68,10 @@ impl AppState {
 
     pub async fn get_list(self: &Arc<AppState>, list_id: DbId) -> Option<Arc<Mutex<List>>> {
         if !self.lists.read().await.contains_key(&list_id) {
-            //let mut conn = self.get_gulp_conn().await.ok()?;
             let list = List::from_id(self, list_id).await?;
             self.lists.write().await.entry(list_id).or_insert(Arc::new(Mutex::new(list)));
         }
+        println!("{:?}",self.lists.read().await.keys());
         self.lists.read().await.get(&list_id).map(|x|x.clone())
     }
 }
