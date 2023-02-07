@@ -54,6 +54,7 @@ pub mod header;
 pub mod cell;
 pub mod row;
 pub mod list;
+
 async fn get_user(state: &Arc<AppState>,cookies: &headers::Cookie) -> Option<String> {
     let cookie = cookies.get(COOKIE_NAME).unwrap();
     match state.store.load_session(cookie.to_string()).await.unwrap() {
