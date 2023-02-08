@@ -8,14 +8,13 @@ var user ;
 function load_user_data(callback) {
     $.get("/auth/info",function(d){
         user = d.user;
-        if ( user===null ) {
+        if ( user==null ) {
             $("#user_greeting").text("");
-            $("#login_logout").html("<span tt='logout'></span>").attr("href","/auth/login");
+            $("#login_logout").html("<span tt='login'></span>").attr("href","/auth/login");
         } else {
             $("#user_greeting").text(user.username);
             $("#login_logout").html("<span tt='logout'></span>").attr("href","/auth/logout");
         }
-        //tt.updateInterface($('#login_logout')) ;
         callback();
     },"json");
 }
