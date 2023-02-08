@@ -35,7 +35,7 @@ $(document).ready ( function () {
     vue_components.toolname = 'gulp' ;
     Promise.all ( [
             vue_components.loadComponents ( ['tool-translate','wd-link',//'autodesc','wikidatamap','wd-date','tool-navbar','commons-thumbnail',
-                'vue-components/main_page.html',
+                'vue_components/main_page.html',
                 ] ) ,
 //            new Promise(function(resolve, reject) { loadPropertyCache ( resolve ) } )
     ] ) .then ( () => {
