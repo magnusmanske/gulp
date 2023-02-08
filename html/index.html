@@ -7,10 +7,21 @@
 <META NAME="ROBOTS" CONTENT="NOINDEX, NOFOLLOW">
 <title>GULP</title>
 
+<script src="https://tools-static.wmflabs.org/cdnjs/ajax/libs/vue/2.5.13/vue.min.js"></script>
+<script src="https://tools-static.wmflabs.org/cdnjs/ajax/libs/vue-router/3.0.1/vue-router.min.js"></script>
+<script src="https://tools-static.wmflabs.org/tooltranslate/tt.js"></script>
+<script src="https://tools-static.wmflabs.org/magnustools/resources/js/wikidata.js"></script>
+<script src="https://tools-static.wmflabs.org/magnustools/resources/vue/shared.js"></script>
+
 <link rel="stylesheet" href="https://tools-static.wmflabs.org/cdnjs/ajax/libs/twitter-bootstrap/4.0.0-beta.2/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://tools-static.wmflabs.org/magnustools/resources/html/wikimedia.css">
 
 <style>
+#app {
+	max-width:960px;
+	margin-left:auto;
+	margin-right:auto;
+}
 </style>
 
 
@@ -23,6 +34,7 @@
 
 <body>
 
+<div id='app'>
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
 
 	<button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,29 +44,23 @@
 	<div class="collapse navbar-collapse" id="bd-main-nav">
 	<ul class="navbar-nav mr-auto">
 		<li class="nav-item"><a class="nav-item nav-link active" tt="toolname" href="/"></a></li>
-		<li class="nav-item"><a target='_blank' class="nav-item nav-link" tt="manual" href="#"></a></li>
-		<li class="nav-item"><a target='_blank' class="nav-item nav-link" tt="issues" href="https://github.com/magnusmanske/petscan_rs/issues"></a></li>
-		<li class="nav-item"><div class="btn-group nav-item nav-link" id='interface_languages_wrapper'></div></li>
+		<li class="nav-item"><a target='_blank' class="nav-item nav-link" tt="manual" href="https://meta.wikimedia.org/wiki/GULP"></a></li>
+		<li class="nav-item"><a target='_blank' class="nav-item nav-link" tt="issues" href="https://github.com/magnusmanske/gulp/issues"></a></li>
+      	<li class="nav-item"><div id='tooltranslate_wrapper'></div></li>
 	</ul>
 
-	<div class="btn-group nav-item nav-link"><a target='_blank' class="btn btn-outline-warning" tt="examples" href="#"></a></div>
+	<!--<div class="btn-group nav-item nav-link"><a target='_blank' class="btn btn-outline-warning" tt="examples" href="#"></a></div>-->
 	<div class="btn-group nav-item nav-link">
 		<span id="user_greeting"></span>
-		<a class='btn btn-outline-default' id='login_logout' href="/auth/login">Log in</a>
+		<a class='btn btn-outline-default' id='login_logout' href="/auth/login"><span tt="login"></span></a>
 	</div>
     <a style="margin:0px;padding:0px;margin-top:4px;margin-left:10px;" href="https://tools.wmflabs.org" target='_blank'><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Toolforge_logo.svg/32px-Toolforge_logo.svg.png" tt_title="wmf_powered" border="0" width="32px"></a>
 
   </div>
 </nav>
 
+<router-view :key="$route.path"><i tt='loading'></i></router-view>
 
-<div class="container mt-2">
-	<div class="row">
-	<div class="col-md-12">
-		<h1>GULP</h1>
-    	<p>General Unified List Processor</p>
-    </div>
-  </div>
 </div>
 
 </body>
