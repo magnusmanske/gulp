@@ -27,6 +27,7 @@ md5 = "*"
 clap = { version = "4", features = ["derive"] }
 async-session = "3"
 axum = { version="*", features = ["headers"] }
+axum-extra = { version="*", features = ["spa"] }
 headers = "0.3"
 http = "0.2"
 oauth2 = "4.1"
