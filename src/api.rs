@@ -33,6 +33,7 @@ async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Co
     let cookie = cookies.to_owned()?.get(COOKIE_NAME)?.to_string();
     let session = state.store.load_session(cookie).await.ok()??;
     let j = json!(session).get("data").cloned()?;
+    let j = j.get("user").unwrap();
     serde_json::from_str(j.as_str()?).ok()
 }
 

@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 pub static COOKIE_NAME: &str = "SESSION";
 
-// The user data we'll get back from toolforge.
+// The user data we'll get back from WMF.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     pub username: String,
@@ -40,7 +40,7 @@ pub async fn toolforge_auth(State(state): State<Arc<AppState>>) -> impl IntoResp
         //.add_scope(Scope::new("identify".to_string()))
         .url();
 
-    // Redirect to toolforge's oauth service
+    // Redirect to WMF's oauth service
     Redirect::to(auth_url.as_ref())
 }
 

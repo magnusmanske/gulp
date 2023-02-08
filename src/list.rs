@@ -72,8 +72,7 @@ impl List {
         Ok(rows)
     }
 
-    pub async fn import_from_url(&self, url: &str, file_type: FileType) -> Result<(), GenericError> {
-        let user_id = 1; // TODO FIXME
+    pub async fn import_from_url(&self, url: &str, file_type: FileType, user_id: DbId) -> Result<(), GenericError> {
         let client = reqwest::Client::builder()
             .user_agent("gulp/0.1")
             .build()?;
