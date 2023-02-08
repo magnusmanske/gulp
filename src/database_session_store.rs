@@ -1,6 +1,7 @@
 use mysql_async::{prelude::*, Conn};
 use async_session::{Result, Session, SessionStore};
 use async_trait::async_trait;
+use serde_json::json;
 
 #[derive(Default, Debug, Clone)]
 pub struct DatabaseSessionStore {
@@ -10,16 +11,14 @@ pub struct DatabaseSessionStore {
 #[async_trait]
 impl SessionStore for DatabaseSessionStore {
     async fn load_session(&self, cookie_value: String) -> Result<Option<Session>> {
-        let id = Session::id_from_cookie_value(&cookie_value)?;
-        println!("{id} => {cookie_value}");
-        let sql = "SELECT `cookie` FROM `session` WHERE `id_string`=:id" ;
+        let id_string = Session::id_from_cookie_value(&cookie_value)?;
+        let sql = "SELECT `json` FROM `session` WHERE `id_string`=:id_string" ;
         let res = self.get_gulp_conn().await
-            .exec_iter(sql,params! {id}).await?
+            .exec_iter(sql,params! {id_string}).await?
             .map_and_drop(|row| mysql_async::from_row::<String>(row)).await.unwrap().get(0).cloned();
         match res {
-            Some(s) => {
-                let mut session = Session::new();
-                session.set_cookie_value(s);
+            Some(json) => {
+                let session: Session = serde_json::from_str(&json).unwrap();
                 // TODO Session::validate
                 Ok(Some(session))
             }
@@ -28,19 +27,18 @@ impl SessionStore for DatabaseSessionStore {
     }
 
     async fn store_session(&self, session: Session) -> Result<Option<String>> {
-        let id = session.id().to_string();
-        let cookie = session.clone().into_cookie_value().unwrap();
-        let sql = "REPLACE INTO `session` (id_string,cookie) VALUES (:id,:cookie)" ;
-        self.get_gulp_conn().await.exec_drop(sql, params!{id,cookie}).await?;
-
+        let id_string = session.id().to_string();
+        let json = json!(session).to_string();
+        let sql = "REPLACE INTO `session` (id_string,json) VALUES (:id_string,:json)" ;
+        self.get_gulp_conn().await.exec_drop(sql, params!{id_string,json}).await?;
         session.reset_data_changed();
         Ok(session.into_cookie_value())
     }
 
     async fn destroy_session(&self, session: Session) -> Result {
-        let id = session.id().to_string();
-        let sql = "DELETE FROM `session` WHERE `id_string`=:id" ;
-        self.get_gulp_conn().await.exec_drop(sql, params!{id}).await?;
+        let id_string = session.id().to_string();
+        let sql = "DELETE FROM `session` WHERE `id_string`=:id_string" ;
+        self.get_gulp_conn().await.exec_drop(sql, params!{id_string}).await?;
         Ok(())
     }
 

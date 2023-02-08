@@ -6,13 +6,9 @@ use mysql_async::{Conn,Opts,OptsBuilder,PoolConstraints,PoolOpts};
 use oauth2::{AuthUrl, ClientId, ClientSecret, TokenUrl, RedirectUrl};
 use oauth2::basic::BasicClient;
 use serde_json::Value;
-use crate::{list::List, header::DbId};
 use tokio::sync::{Mutex, RwLock};
 use std::sync::Arc;
-// use configuration::Configuration;
-// use mysql_async::from_row;
-// use mysql_async::prelude::*;
-
+use crate::{list::List, header::DbId};
 use crate::GenericError;
 use crate::database_session_store::DatabaseSessionStore;
 
@@ -25,7 +21,7 @@ pub struct AppState {
     _import_file_path: String,
     pub consumer_token: String,
     pub secret_token: String,
-    pub store: DatabaseSessionStore,
+    pub store: DatabaseSessionStore,//MemoryStore,//
     pub oauth_client: BasicClient,
 }
 
@@ -63,7 +59,7 @@ impl AppState {
             _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
             consumer_token: config["consumer_token"].as_str().unwrap().to_string(),
             secret_token: config["secret_token"].as_str().unwrap().to_string(),
-            store: DatabaseSessionStore{pool: Some(gulp_pool.clone())},
+            store: DatabaseSessionStore{pool: Some(gulp_pool.clone())}, //MemoryStore::new(),//
             oauth_client,
         };
         ret

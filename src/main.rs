@@ -73,7 +73,7 @@ async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Co
 
 fn user_box(user: &Option<String>) -> String {
     let ret = match user {
-        Some(username) => format!("Welcome, {username}!"),
+        Some(username) => format!("Welcome, {username}!<br/><a href='/auth/logout'>Log out</a>"),
         None => "<a href='/auth/login'>Log in</a>".to_string()
     };
     format!("<div style='float:right;'>{ret}</div>")
