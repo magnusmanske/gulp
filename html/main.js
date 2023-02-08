@@ -9,6 +9,7 @@ $(document).ready(function(){
             $("#user_greeting").text("");
             $("#login_logout").text("Log in").attr("href","/auth/login");
         } else {
+            user = JSON.parse(user.user); // TODO serve this as JSON rather than string
             $("#user_greeting").text(user.username);
             $("#login_logout").text("Log out").attr("href","/auth/logout");
         }

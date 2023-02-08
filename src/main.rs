@@ -43,18 +43,9 @@ pub mod row;
 pub mod list;
 
 async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<serde_json::Value> {
-    let cookies = match cookies {
-        Some(cookies) => cookies,
-        None => return None,
-    };
-    let cookie = cookies.get(COOKIE_NAME).unwrap();
-    match state.store.load_session(cookie.to_string()).await.unwrap() {
-        Some(session) => {
-            let j = json!(session);
-            j.get("data").cloned()
-        }
-        None => None
-    }
+    let cookie = cookies.to_owned()?.get(COOKIE_NAME)?.to_string();
+    let session = state.store.load_session(cookie).await.ok()??;
+    json!(session).get("data").cloned()
 }
 
 async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
