@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use serde_json::json;
+use serde::Serialize;
 use mysql_async::{prelude::*, Conn};
+use serde_json::json;
 use crate::app_state::AppState;
 use crate::header::*;
 use crate::cell::*;
@@ -17,12 +18,16 @@ pub enum FileType {
     JSONL,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct List {
     pub id: DbId,
     pub name: String,
     pub revision_id: DbId, // ALWAYS THE CURRENT ONE
+
+    #[serde(skip_serializing)]
     pub header: Header,
+
+    #[serde(skip_serializing)]
     pub app: Arc<AppState>,
 }
 
@@ -36,7 +41,7 @@ impl List {
         Self::from_row(app, &row, list_id).await
     }
 
-    async fn from_row(app: &Arc<AppState>, row: &mysql_async::Row, list_id: DbId) -> Option<Self> {
+    pub async fn from_row(app: &Arc<AppState>, row: &mysql_async::Row, list_id: DbId) -> Option<Self> {
         let mut conn = app.get_gulp_conn().await.ok()?;
         Some(Self {
             app: app.clone(),

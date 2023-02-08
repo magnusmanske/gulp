@@ -7,8 +7,8 @@ use axum::{
     extract::Path,
     http::StatusCode,
 };
-use crate::header::DbId;
 use serde_json::json;
+use crate::header::DbId;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -32,7 +32,13 @@ use crate::GenericError;
 async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<serde_json::Value> {
     let cookie = cookies.to_owned()?.get(COOKIE_NAME)?.to_string();
     let session = state.store.load_session(cookie).await.ok()??;
-    json!(session).get("data").cloned()
+    let j = json!(session).get("data").cloned()?;
+    serde_json::from_str(j.as_str()?).ok()
+}
+
+async fn get_user_id(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<DbId> {
+    let user = get_user(&state,&cookies).await?;
+    state.get_or_create_wiki_user_id(user.get("username")?.as_str()?).await
 }
 
 async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
@@ -70,6 +76,15 @@ async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(pa
     }
 }
 
+async fn my_lists(State(state): State<Arc<AppState>>, Path(rights): Path<String>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
+    let user_id = match get_user_id(&state,&cookies).await {
+        Some(user_id) => user_id,
+        None => return (StatusCode::OK, Json(json!({"status":"Could not get a user ID"}))).into_response()
+    };
+    let res = state.get_lists_by_user_rights(user_id,&rights).await.unwrap_or(vec![]);
+    let j = json!({"status":"OK","lists":res});
+    (StatusCode::OK, Json(j)).into_response()
+}
 
 pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
     tracing_subscriber::fmt::init();
@@ -81,6 +96,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/auth/authorized", get(login_authorized))
         .route("/auth/info", get(auth_info))
         .route("/auth/logout", get(logout))
+        .route("/auth/lists/:rights", get(my_lists))
 
         .route("/list/:id", get(list))
 
