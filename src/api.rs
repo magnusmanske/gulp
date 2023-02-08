@@ -102,7 +102,6 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/list/:id", get(list))
 
         .merge(SpaRouter::new("/", "html").index_file("index.html"))
-        .merge(SpaRouter::new("/vue_components", "html/vue_components"))
         .with_state(shared_state)
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
