@@ -2,7 +2,6 @@ use std::{env, collections::HashMap};
 use std::fs::File;
 use std::time::Duration;
 
-use async_session::MemoryStore;
 use mysql_async::{Conn,Opts,OptsBuilder,PoolConstraints,PoolOpts};
 use oauth2::{AuthUrl, ClientId, ClientSecret, TokenUrl, RedirectUrl};
 use oauth2::basic::BasicClient;
@@ -15,6 +14,7 @@ use std::sync::Arc;
 // use mysql_async::prelude::*;
 
 use crate::GenericError;
+use crate::database_session_store::DatabaseSessionStore;
 
 type ListMutex = Arc<Mutex<List>>;
 
@@ -25,7 +25,7 @@ pub struct AppState {
     _import_file_path: String,
     pub consumer_token: String,
     pub secret_token: String,
-    pub store: MemoryStore,
+    pub store: DatabaseSessionStore,
     pub oauth_client: BasicClient,
 }
 
@@ -55,14 +55,15 @@ impl AppState {
         )
         .set_redirect_uri(RedirectUrl::new(redirect_url.to_string()).unwrap());
 
+        let gulp_pool = Self::create_pool(&config["gulp"]);
         let ret = Self {
             lists: Arc::new(RwLock::new(HashMap::new())),
-            gulp_pool: Self::create_pool(&config["gulp"]),
+            gulp_pool: gulp_pool.clone(),
             // mnm_pool: Self::create_pool(&config["mixnmatch"]),
             _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
             consumer_token: config["consumer_token"].as_str().unwrap().to_string(),
             secret_token: config["secret_token"].as_str().unwrap().to_string(),
-            store: MemoryStore::new(),
+            store: DatabaseSessionStore{pool: Some(gulp_pool.clone())},
             oauth_client,
         };
         ret

@@ -30,3 +30,4 @@ axum = { version="*", features = ["headers"] }
 headers = "0.3"
 http = "0.2"
 oauth2 = "4.1"
+async-trait = "*"

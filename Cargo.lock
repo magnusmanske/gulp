@@ -1124,6 +1124,7 @@ name = "gulp"
 version = "0.1.0"
 dependencies = [
  "async-session",
+ "async-trait",
  "axum",
  "chrono",
  "clap",

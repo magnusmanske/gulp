@@ -50,6 +50,7 @@ static COOKIE_NAME: &str = "SESSION";
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 pub mod app_state;
+pub mod database_session_store;
 pub mod header;
 pub mod cell;
 pub mod row;
