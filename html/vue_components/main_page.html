@@ -4,6 +4,9 @@
 	<div class="col-md-12">
 		<h1>GULP</h1>
     	<p>General Unified List Processor</p>
+        <div>
+            {{user_lists}}
+        </div>
     </div>
   </div>
 </div>
@@ -15,11 +18,23 @@
 
 let MainPage = Vue.extend ( {
     props : [] ,
-    data : function () { return {} } ,
-    created : function () {} ,
+    data : function () { return { user_lists:[] } } ,
+    created : function () {
+        this.load_user_lists();
+    } ,
     updated : function () { tt.updateInterface(this.$el) } ,
     mounted : function () { tt.updateInterface(this.$el) } ,
     methods : {
+        load_user_lists: function() {
+            let self = this ;
+            $.get("/auth/lists/write,admin",function(d){
+                if ( d.status=="OK" ) self.user_lists = d.lists;
+                else {
+                    self.user_lists = [];
+                    console.log("Could not load lists for user");
+                }
+            },"json")
+        }
     } ,
     template:'#main-page-template'
 } );
