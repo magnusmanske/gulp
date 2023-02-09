@@ -72,7 +72,25 @@ async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
     (StatusCode::OK, Json(j)).into_response()
 }
 
-async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
+async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>) -> Response {
+    let list = match AppState::get_list(&state,id).await {
+        Some(list) => list,
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
+    };
+    let mut list = list.lock().await;
+    let old_revision_id = list.revision_id;
+    let new_revision_id = match list.snapshot().await {
+        Ok(rev_id) => rev_id,
+        Err(e) => return (StatusCode::GONE ,Json(json!({"status":format!("Error creating snapshot: {}",e.to_string())}))).into_response(),
+    };
+    let j = json!({
+        "old_revision_id" : old_revision_id,
+        "new_revision_id" : new_revision_id,
+    });
+    (StatusCode::OK, Json(j)).into_response()
+}
+
+async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
     let format: String = params.get("format").unwrap_or(&"json".into()).into();
     let start: u64 = params.get("start").map(|s|s.parse::<u64>().unwrap_or(0)).unwrap_or(0);
     let len: Option<u64> = params.get("len").map(|s|s.parse::<u64>().unwrap_or(u64::MAX));
@@ -124,8 +142,9 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/auth/logout", get(logout))
         .route("/auth/lists/:rights", get(my_lists))
 
-        .route("/list/:id", get(list))
-        .route("/list_info/:id", get(list_info))
+        .route("/list/rows/:id", get(list_rows))
+        .route("/list/info/:id", get(list_info))
+        .route("/list/snapshot/:id", get(list_snapshot))
 
         .merge(SpaRouter::new("/", "html").index_file("index.html"))
         .with_state(shared_state)
