@@ -1,9 +1,10 @@
 use mysql_async::{prelude::*, Conn};
+use serde::Serialize;
 
 pub type NamespaceType = i64;
 pub type DbId = u64;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum ColumnType {
     String,
     WikiPage,
@@ -21,7 +22,7 @@ impl ColumnType {
 
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct HeaderColumn {
     pub column_type: ColumnType,
     pub wiki: Option<String>,
@@ -43,7 +44,7 @@ impl HeaderColumn {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct HeaderSchema {
     pub id: DbId,
     pub name: String,
@@ -74,7 +75,7 @@ impl HeaderSchema {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Header {
     pub id: DbId,
     pub list_id: DbId,
