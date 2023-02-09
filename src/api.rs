@@ -17,7 +17,7 @@ use axum::{
     Router,
     http::StatusCode,
     Server,
-    extract::{Path,State,Query,Multipart,TypedHeader},
+    extract::{Path,State,Query,Multipart,TypedHeader,DefaultBodyLimit},
     response::{IntoResponse, Response},
 };
 use crate::GenericError;
@@ -163,6 +163,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
 
         .merge(SpaRouter::new("/", "html").index_file("index.html"))
         .with_state(shared_state)
+        .layer(DefaultBodyLimit::max(1024*1024*8)) // 8MB
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(cors);
