@@ -16,7 +16,6 @@ serde = "1"
 serde_json = "1"
 nom-bibtex = "*"
 chrono = "*"
-#axum = "0.6.2"
 tracing = "*"
 tracing-subscriber = "*"
 ureq = "2"
@@ -26,7 +25,7 @@ config = "^0.10"
 md5 = "*"
 clap = { version = "4", features = ["derive"] }
 async-session = "3"
-axum = { version="*", features = ["headers"] }
+axum = { version="*", features = ["headers","multipart"] }
 axum-extra = { version="*", features = ["spa"] }
 headers = "0.3"
 http = "0.2"

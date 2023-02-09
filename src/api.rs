@@ -1,13 +1,6 @@
 use crate::app_state::AppState;
 use crate::oauth::*;
 use crate::header::DbId;
-use axum::{
-    routing::get,
-    Json, 
-    Router,
-    extract::Path,
-    http::StatusCode,
-};
 use csv::WriterBuilder;use serde_json::json;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -19,12 +12,12 @@ use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use axum_extra::routing::SpaRouter;
 use async_session::SessionStore;
 use axum::{
+    routing::{get, post},
+    Json, 
+    Router,
+    http::StatusCode,
     Server,
-    extract::State,
-    extract::Query,
-    extract::{
-        TypedHeader,
-    },
+    extract::{Path,State,Query,Multipart,TypedHeader},
     response::{IntoResponse, Response},
 };
 use crate::GenericError;
@@ -140,6 +133,16 @@ async fn my_lists(State(state): State<Arc<AppState>>, Path(rights): Path<String>
     (StatusCode::OK, Json(j)).into_response()
 }
 
+async fn upload(mut multipart: Multipart) {
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let name = field.name().unwrap().to_string();
+        let data = field.bytes().await.unwrap();
+
+        println!("Length of `{}` is {} bytes", name, data.len());
+    }
+}
+
+
 pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
     tracing_subscriber::fmt::init();
 
@@ -155,6 +158,8 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/list/rows/:id", get(list_rows))
         .route("/list/info/:id", get(list_info))
         .route("/list/snapshot/:id", get(list_snapshot))
+
+        .route("/upload", post(upload))
 
         .merge(SpaRouter::new("/", "html").index_file("index.html"))
         .with_state(shared_state)
