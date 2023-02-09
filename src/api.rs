@@ -66,7 +66,8 @@ async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
         "status":"OK",
         "list":list.to_owned(),
         "users":users_in_revision,
-        "total":numer_of_rows
+        "total":numer_of_rows,
+        "revision_id":revision_id,
     });
     (StatusCode::OK, Json(j)).into_response()
 }
