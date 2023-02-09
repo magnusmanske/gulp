@@ -42,7 +42,7 @@ let ListPage = Vue.extend ( {
     	} ,
         load_list(resolve) {
         	let url = "/list_info/"+this.list_id;
-        	if ( typeof this.initial_revision_id!='undefined') url += "?revison_id="+this.initial_revision_id;
+        	if ( typeof this.initial_revision_id!='undefined') url += "?revision_id="+this.initial_revision_id;
             fetch(url)
                 .then((response) => response.json())
                 .then((d) => this.list=d)
