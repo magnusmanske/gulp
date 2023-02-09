@@ -1,0 +1,76 @@
+<style>
+a.batch_link_disabled {
+	color:black !important;
+}
+</style>
+
+<template id='batch-navigator-template'>
+<div style='margin-left:auto;margin-right:auto;' v-if='total>batch_size'>
+	<nav style='display:flex'>
+		<ul v-if='batches<20' class="pagination">
+			<li>
+				<a :class="'page-link'+(current==0?' batch_link_disabled':'')" href="#" @click.prevent='setCurrentBatch(current-1)'>←</a>
+			</li>
+			<li v-for='batch in [...Array(batches).keys()]' class="page-item">
+				<a v-if='batch==current' class="page-link disabled" href='#' @click.prevent='setCurrentBatch(batch)' disabled>
+					<b style='color:black'>{{batch+1}}</b>
+				</a>
+				<a v-else class="page-link" href="#" @click.prevent='setCurrentBatch(batch)'>
+					{{batch+1}}
+				</a>
+			</li>
+			<li>
+				<a :class="'page-link'+(current<batches-1?'':' batch_link_disabled')" href="#" @click.prevent='setCurrentBatch(current+1)'>→</a>
+			</li>
+		</ul>
+		<ul v-else class="pagination">
+			<li>
+				<a :class="'page-link'+(current==0?' batch_link_disabled':'')" href="#" @click.prevent='setCurrentBatch(current-1)'>←</a>
+			</li>
+			<li class="page-item" style='padding-left:1rem;padding-right:1rem;'>
+				<select v-model='current' @change='setCurrentBatch(current,true)' class="form-control" style="display:inline; width:auto;">
+					<option v-for='batch in [...Array(batches).keys()]' :value='batch'>{{batch+1}}</option>
+				</select>
+			</li>
+			<li>
+				<a :class="'page-link'+(current<batches-1?'':' batch_link_disabled')" href="#" @click.prevent='setCurrentBatch(current+1)'>→</a>
+			</li>
+		</ul>
+
+		<form v-if='typeof batch_size_options!="undefined"'>
+			<select class='form-control' class="form-control" style="display:inline; width:auto; margin-left:1rem;" v-model='new_size' @change='onChangeSize'>
+				<option v-for='size in batch_size_options' :value='size'>{{size}}</option>
+			</select>
+		</form>
+	</nav>
+</div>
+</template>
+
+<script>
+'use strict';
+
+Vue.component ( 'batch-navigator' , {
+    props : [ 'batch_size' , 'total' , 'current' , 'batch_size_options' ] ,
+    data : function () { return { batches:0 , new_size:0 } } ,
+    created : function () {
+        let me = this ;
+        me.new_size = me.batch_size ;
+        me.batches = Math.floor((me.total+me.batch_size-1)/me.batch_size) ;
+    } ,
+    updated : function () { tt.updateInterface(this.$el) } ,
+    mounted : function () { tt.updateInterface(this.$el) } ,
+    methods : {
+    	onChangeSize : function () {
+    		if ( this.batch_size == this.new_size ) return ;
+    		this.$emit ( 'set-size' , this.new_size ) ;
+    	} ,
+    	setCurrentBatch : function ( new_batch , force_update = false ) {
+    		if ( new_batch >= this.batches ) return ; // new_batch == 0 || 
+    		if ( this.current == new_batch && !force_update ) return ;
+    		this.$emit ( 'set-current' , new_batch ) ;
+    	}
+    } ,
+    template : '#batch-navigator-template'
+} ) ;
+
+</script>

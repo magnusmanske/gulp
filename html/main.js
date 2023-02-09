@@ -23,6 +23,7 @@ $(document).ready(function(){
                 'vue_components/main_page.html',
                 'vue_components/list_page.html',
                 'vue_components/list.html',
+                'vue_components/batch-navigator.html',
                 ] ) ,
             new Promise(function(resolve, reject) {
                 fetch("/auth/info")
@@ -38,6 +39,7 @@ $(document).ready(function(){
         const routes = [
           { path: '/', component: MainPage },
           { path: '/list/:list_id', component: ListPage , props:true },
+          { path: '/list/:list_id/:initial_revision_id', component: ListPage , props:true },
 /*
           { path: '/group', component: CatalogGroup , props:true },
           { path: '/group/:key', component: CatalogGroup , props:true },
