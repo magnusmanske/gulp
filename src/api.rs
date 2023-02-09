@@ -48,16 +48,15 @@ async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeade
 }
 
 async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
-    let format: String = match params.get("format") {
-        Some(s) => s.into(),
-        None => "json".into(),
-    };
+    let format: String = params.get("format").unwrap_or(&"json".into()).into();
+    let start: u64 = params.get("start").map(|s|s.parse::<u64>().unwrap_or(0)).unwrap_or(0);
+    let len: Option<u64> = params.get("len").map(|s|s.parse::<u64>().unwrap_or(u64::MAX));
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
         None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
     };
     let list = list.lock().await;
-    let rows = match list.get_rows_for_revision(list.revision_id).await {
+    let rows = match list.get_rows_for_revision_paginated(list.revision_id, start, len).await {
         Ok(rows) => rows,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
     };
