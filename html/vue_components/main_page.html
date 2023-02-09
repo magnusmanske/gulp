@@ -2,10 +2,27 @@
 <div class="container mt-2">
 	<div class="row">
 	<div class="col-md-12">
-		<h1>GULP</h1>
-    	<p>General Unified List Processor</p>
+		<h1 tt="toolname"></h1>
+    	<p tt="tooldesc"></p>
         <div>
-            {{user_lists}}
+            <table class="table">
+                <tr>
+                    <th>#</th>
+                    <th tt='list_name'></th>
+                    <th tt='rights'></th>
+                </tr>
+                <tr v-for='list in user_lists'>
+                    <td>
+                        <router-link :to="'/list/'+list.id">{{list.id}}</router-link>
+                    </td>
+                    <td>
+                        {{list.name}}
+                    </td>
+                    <td>
+                        {{list.rights}}
+                    </td>
+                </tr>
+            </table>
         </div>
     </div>
   </div>
