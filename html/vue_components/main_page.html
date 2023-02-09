@@ -4,7 +4,9 @@
 	<div class="col-md-12">
 		<h1 tt="toolname"></h1>
     	<p tt="tooldesc"></p>
-        <div>
+        <div v-if='no_lists_for_user' tt='no_lists_for_user'>
+        </div>
+        <div v-else>
             <table class="table">
                 <tr>
                     <th>#</th>
@@ -35,7 +37,7 @@
 
 let MainPage = Vue.extend ( {
     props : [] ,
-    data : function () { return { user_lists:[] } } ,
+    data : function () { return { user_lists:[] , no_lists_for_user:false } } ,
     created : function () {
         this.load_user_lists();
     } ,
@@ -43,14 +45,12 @@ let MainPage = Vue.extend ( {
     mounted : function () { tt.updateInterface(this.$el) } ,
     methods : {
         load_user_lists: function() {
-            let self = this ;
-            $.get("/auth/lists/write,admin",function(d){
-                if ( d.status=="OK" ) self.user_lists = d.lists;
-                else {
-                    self.user_lists = [];
-                    console.log("Could not load lists for user");
-                }
-            },"json")
+            fetch("/auth/lists/write,admin")
+            .then((response) => response.json())
+            .then((d) => {
+                if ( d.status=="OK" ) this.user_lists = d.lists;
+                else this.no_lists_for_user = true;
+            });
         }
     } ,
     template:'#main-page-template'

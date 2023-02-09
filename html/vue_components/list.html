@@ -1,0 +1,30 @@
+<template id='list-template'>
+<div class="container mt-2">
+	<div class="row">
+	<div class="col-md-12">
+		Some stuff
+	</div>
+  </div>
+</div>
+</template>
+
+<script>
+'use strict';
+
+
+Vue.component ( 'list' , {
+    props : ['list_id'] ,
+    data : function () { return { offset:0, size:25 , rows:[] } } ,
+    created : function () {
+        this.load_list();
+    } ,
+    updated : function () { tt.updateInterface(this.$el) } ,
+    mounted : function () { tt.updateInterface(this.$el) } ,
+    methods : {
+        load_list : function () {
+            console.log("!!"+this.list_id)
+        }
+    } ,
+    template:'#list-template'
+} );
+</script>
