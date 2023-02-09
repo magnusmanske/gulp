@@ -104,19 +104,24 @@ impl Row {
         json!(ret)
     }
 
-    pub fn as_tsv(&self, header: &Header) -> String {
-        let ret: Vec<String> = self
+    pub fn as_vec(&self, header: &Header) -> Vec<String> {
+        let mut ret: Vec<String> = self
             .cells
             .iter()
             .zip(header.schema.columns.iter())
             .map(|(cell,column)|{
                 match cell {
-                    Some(c) => c.as_tsv(column),
+                    Some(c) => c.as_string(column),
                     None => String::new(),
                 }
             })
             .collect();
-        format!("{}\t{}",self.row_num,ret.join("\t"))
+        ret.insert(0, format!("{}",self.row_num));
+        ret
+    }
+
+    pub fn as_tsv(&self, header: &Header) -> String {
+        self.as_vec(header).join("\t")
     }
 
 }
