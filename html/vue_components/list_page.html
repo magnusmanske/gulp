@@ -1,16 +1,36 @@
+<style>
+ul.list-top li {
+	margin-left:0.5rem;
+	margin-right:0.5rem;
+}
+</style>
+
 <template id='list-page-template'>
 <div class="container-fluid mt-2">
 <div class="row">
 	<div class="col-md-12" v-if='!loading'>
 		<h1><span tt='list_with_number' :tt1='list_id'></span>: {{list.list.name}}</h1>
 		<div>
-			<span>
-				<span tt='revision'></span>
-				<select v-model='revision_id' class="form-control" style="display:inline; width:auto;" @change='change_revision'>
-					<option v-for='revid in revisions' :value='revid'>{{revid}}</option>
-				</select>
-			</span>
-			<span style="margin-left:0.5rem;" tt='total_rows' :tt1='list.total'></span>
+			<ul class="pagination list-top">
+				<li>
+					<span tt='revision'></span>
+					<select v-model='revision_id' class="form-control" style="display:inline; width:auto;" @change='change_revision'>
+						<option v-for='revid in revisions' :value='revid'>{{revid}}</option>
+					</select>
+				</li>
+				<li style="padding-top:0.4rem;" tt='total_rows' :tt1='list.total'></li>
+				<li style="padding-top:0.4rem;">
+					<button class="btn btn-outline-secondary" href="#" @click.prevent="snapshot" tt='snapshot' style="margin-top: -0.4rem;"></button>
+				</li>
+				<li>
+					<select v-model="download_type" class="form-control" style="display: inline-block; width: auto;" @change="set_download_url">
+						<option value='json' tt='json'></option>
+						<option value='tsv' tt='tsv'></option>
+					</select>
+					<a :href="download_url" tt_title="download" :download="'gulp.list.'+list.list.id+'.'+list.revision_id+'.'+download_type">
+						<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Cloud_Download_-_The_Noun_Project.svg/32px-Cloud_Download_-_The_Noun_Project.svg.png"/>
+					</a>
+				</li>
 		</div>
 		<list :list='list' :revision_id='revision_id'></list>
 	</div>
@@ -24,10 +44,11 @@
 
 let ListPage = Vue.extend ( {
     props : ['list_id','initial_revision_id'] ,
-    data : function () { return { list:{} , revision_id:0 , revisions:[] , loading:true } } ,
+    data : function () { return { list:{} , revision_id:0 , revisions:[] , download_type:'tsv' , download_url:'' , loading:true } } ,
     created : function () {
     	this.load_list(()=>{
     	    this.fix_columns();
+    	    this.set_download_url();
     		this.loading=false
     	})
     },
@@ -43,8 +64,27 @@ let ListPage = Vue.extend ( {
 	    		this.$router.push ("/list/"+this.list.list.id+"/"+this.revision_id);
     		}
     	} ,
+    	set_download_url() {
+    		let url = "//gulp.toolforge.org/list/rows/"+this.list.list.id+"?format="+this.download_type ;
+    		if ( this.revision_id!=this.list.list.revision_id ) url += "&revision_id="+this.revision_id;
+    		this.download_url = url;
+    	} ,
+    	snapshot() {
+    		let url = "/list/snapshot/"+this.list.list.id;
+            fetch(url)
+                .then((response) => response.json())
+                .then((d) => {
+                	if ( d.old_revision_id==d.new_revision_id) {
+                		alert(tt.t("no_new_revision").replace('$1',this.list.revision_id))
+                	} else {
+                		this.list.list.revision_id = d.new_revision_id;
+                		this.revision_id = d.new_revision_id;
+                		this.change_revision()
+                	}
+                })
+    	} ,
         load_list(resolve) {
-        	let url = "/list_info/"+this.list_id;
+        	let url = "/list/info/"+this.list_id;
         	if ( typeof this.initial_revision_id!='undefined') url += "?revision_id="+this.initial_revision_id;
             fetch(url)
                 .then((response) => response.json())

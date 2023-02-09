@@ -6,7 +6,7 @@
 		</span>
 		<span v-else-if='header.wiki=="commonswiki" && header.namespace_id==6'>
 			<span style="text-align: center; width:120px; display: inline-block;">
-				<commons-thumbnail :filename="value" width="120"></commons-thumbnail>
+				<commons-thumbnail :filename="value" width="120" :key="value"></commons-thumbnail>
 			</span>
 			<span style="margin-left:0.5rem;">{{value}}</span>
 		</span>

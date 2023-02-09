@@ -53,7 +53,7 @@ Vue.component ( 'list' , {
             this.load_rows(()=>{}) 
         } ,
         load_rows(resolve) {
-            let url = "/list/"+this.list.list.id+"?start="+this.start+"&len="+this.len;
+            let url = "/list/rows/"+this.list.list.id+"?start="+this.start+"&len="+this.len;
             if ( typeof this.revision_id!='undefined') url += "&revision_id="+this.revision_id;
             fetch(url)
                 .then((response) => response.json())
