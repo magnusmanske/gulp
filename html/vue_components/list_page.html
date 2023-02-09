@@ -24,8 +24,9 @@ ul.list-top li {
 				</li>
 				<li>
 					<select v-model="download_type" class="form-control" style="display: inline-block; width: auto;" @change="set_download_url">
-						<option value='json' tt='json'></option>
+						<option value='csv' tt='csv'></option>
 						<option value='tsv' tt='tsv'></option>
+						<option value='json' tt='json'></option>
 					</select>
 					<a :href="download_url" tt_title="download" :download="'gulp.list.'+list.list.id+'.'+list.revision_id+'.'+download_type">
 						<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Cloud_Download_-_The_Noun_Project.svg/32px-Cloud_Download_-_The_Noun_Project.svg.png"/>
