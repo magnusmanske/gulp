@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use serde::Serialize;
@@ -70,6 +71,29 @@ impl List {
             .map_and_drop(|row| Row::from_row(&row,&self.header)).await?;
         let rows: Vec<Row> = row_opts.iter().cloned().filter_map(|row|row).collect();
         Ok(rows)
+    }
+
+    pub async fn get_users_in_revision(&self, revision_id: DbId) -> Result<HashMap<DbId,String>, GenericError> {
+        let sql = r#"SELECT DISTINCT user_id,user.name FROM `row`,`user`
+            WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id AND revision_id<=:revision_id)
+            AND list_id=:list_id AND revision_id<=:revision_id AND user_id=user.id"#;
+        let list_id = self.id ;
+        let ret = self.app.get_gulp_conn().await?
+            .exec_iter(sql,params! {list_id,revision_id}).await?
+            .map_and_drop(|row| mysql_async::from_row::<(DbId,String)>(row)).await?
+            .into_iter().collect();
+        Ok(ret)
+    }
+
+    pub async fn get_rows_in_revision(&self, revision_id: DbId) -> Result<usize, GenericError> {
+        let sql = r#"SELECT count(*) FROM `row`
+            WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id AND revision_id<=:revision_id)
+            AND list_id=:list_id AND revision_id<=:revision_id"#;
+        let list_id = self.id ;
+        let row_number = self.app.get_gulp_conn().await?
+            .exec_iter(sql,params! {list_id,revision_id}).await?
+            .map_and_drop(|row| mysql_async::from_row::<usize>(row)).await?.get(0).cloned().unwrap_or(0);
+        Ok(row_number)
     }
 
     pub async fn import_from_url(&self, url: &str, file_type: FileType, user_id: DbId) -> Result<(), GenericError> {

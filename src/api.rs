@@ -47,6 +47,30 @@ async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeade
     (StatusCode::OK, Json(j)).into_response()
 }
 
+async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
+    let list = match AppState::get_list(&state,id).await {
+        Some(list) => list,
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
+    };
+    let list = list.lock().await;
+    let revision_id: DbId = params.get("revision_id").map(|s|s.parse::<DbId>().unwrap_or(list.revision_id)).unwrap_or(list.revision_id);
+    let numer_of_rows = match list.get_rows_in_revision(revision_id).await {
+        Ok(numer_of_rows) => numer_of_rows,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
+    };
+    let users_in_revision = match list.get_users_in_revision(revision_id).await {
+        Ok(users_in_revision) => users_in_revision,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
+    };
+    let j = json!({
+        "status":"OK",
+        "list":list.to_owned(),
+        "users":users_in_revision,
+        "total":numer_of_rows
+    });
+    (StatusCode::OK, Json(j)).into_response()
+}
+
 async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
     let format: String = params.get("format").unwrap_or(&"json".into()).into();
     let start: u64 = params.get("start").map(|s|s.parse::<u64>().unwrap_or(0)).unwrap_or(0);
@@ -56,7 +80,8 @@ async fn list(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(pa
         None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
     };
     let list = list.lock().await;
-    let rows = match list.get_rows_for_revision_paginated(list.revision_id, start, len).await {
+    let revision_id: DbId = params.get("revision_id").map(|s|s.parse::<DbId>().unwrap_or(list.revision_id)).unwrap_or(list.revision_id);
+    let rows = match list.get_rows_for_revision_paginated(revision_id, start, len).await {
         Ok(rows) => rows,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
     };
@@ -99,6 +124,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/auth/lists/:rights", get(my_lists))
 
         .route("/list/:id", get(list))
+        .route("/list_info/:id", get(list_info))
 
         .merge(SpaRouter::new("/", "html").index_file("index.html"))
         .with_state(shared_state)
