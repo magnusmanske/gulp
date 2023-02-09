@@ -18,7 +18,7 @@ impl WikiPage {
         }
     }
 
-    pub fn as_tsv(&self, column: &HeaderColumn) -> String {
+    pub fn as_string(&self, column: &HeaderColumn) -> String {
         if self.wiki==column.wiki && self.namespace_id==column.namespace_id {
             self.title.to_owned()
         } else {
@@ -70,10 +70,10 @@ impl Cell {
         }
     }
 
-    pub fn as_tsv(&self, column: &HeaderColumn) -> String {
+    pub fn as_string(&self, column: &HeaderColumn) -> String {
         match self {
             Cell::String(s) => s.to_owned(),
-            Cell::WikiPage(wp) => wp.as_tsv(column),
+            Cell::WikiPage(wp) => wp.as_string(column),
         }
     }
 }

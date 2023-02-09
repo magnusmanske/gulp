@@ -1,5 +1,6 @@
 use crate::app_state::AppState;
 use crate::oauth::*;
+use crate::header::DbId;
 use axum::{
     routing::get,
     Json, 
@@ -7,8 +8,7 @@ use axum::{
     extract::Path,
     http::StatusCode,
 };
-use serde_json::json;
-use crate::header::DbId;
+use csv::WriterBuilder;use serde_json::json;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -106,6 +106,16 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
     };
     
     match format.as_str() {
+        "csv" => {
+            // TODO header
+            let mut wtr = WriterBuilder::new().from_writer(vec![]);
+            for row in &rows {
+                wtr.write_record(&row.as_vec(&list.header)).unwrap();
+            }
+            let inner = wtr.into_inner().unwrap();
+            let s = String::from_utf8(inner).unwrap();
+            (StatusCode::OK, s).into_response()
+        }
         "tsv" => {
             // TODO header
             let rows: Vec<String> = rows.iter().map(|row|row.as_tsv(&list.header)).collect();
