@@ -23,9 +23,7 @@ pub enum FileType {
 pub struct List {
     pub id: DbId,
     pub name: String,
-    pub revision_id: DbId, // ALWAYS THE CURRENT ONE
-
-    #[serde(skip_serializing)]
+    pub revision_id: DbId, // ALWAYS THE CURRENT (LATEST) ONE
     pub header: Header,
 
     #[serde(skip_serializing)]
