@@ -2,7 +2,22 @@
 <div class="container mt-2">
 	<div class="row">
 	<div class="col-md-12">
-		Some stuff
+		<table v-if='rows.length>0' class="table">
+            <tr>
+                <th tt='row_number'></th>
+                <th v-for='cell,cell_number in rows[0].c'>Column {{cell_number+1}}</th>
+                <th tt='user'></th>
+            </tr>
+            <tr v-for="row in rows">
+                <td>{{row.row}}</td>
+                <td v-for="cell in row.c">
+                    {{cell}}
+                </td>
+                <td>
+                    {{row.user}}
+                </td>
+            </tr>
+        </table>
 	</div>
   </div>
 </div>
@@ -14,7 +29,7 @@
 
 Vue.component ( 'list' , {
     props : ['list_id'] ,
-    data : function () { return { offset:0, size:25 , rows:[] } } ,
+    data : function () { return { start:0, len:25 , rows:[] } } ,
     created : function () {
         this.load_list();
     } ,
@@ -22,7 +37,9 @@ Vue.component ( 'list' , {
     mounted : function () { tt.updateInterface(this.$el) } ,
     methods : {
         load_list : function () {
-            console.log("!!"+this.list_id)
+            fetch("/list/"+this.list_id+"?start="+this.start+"&len="+this.len)
+            .then((response) => response.json())
+            .then((d) => this.rows=d.rows)
         }
     } ,
     template:'#list-template'
