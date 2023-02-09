@@ -19,10 +19,11 @@ function set_user_data(d) {
 $(document).ready(function(){
     vue_components.toolname = 'gulp' ;
     Promise.all ( [
-            vue_components.loadComponents ( ['tool-translate','wd-link',//'autodesc','wikidatamap','wd-date','tool-navbar','commons-thumbnail',
+            vue_components.loadComponents ( ['tool-translate','wd-link','commons-thumbnail',//'autodesc','wikidatamap','wd-date','tool-navbar',
                 'vue_components/main_page.html',
                 'vue_components/list_page.html',
                 'vue_components/list.html',
+                'vue_components/cell.html',
                 'vue_components/batch-navigator.html',
                 ] ) ,
             new Promise(function(resolve, reject) {

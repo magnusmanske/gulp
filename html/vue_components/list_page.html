@@ -1,15 +1,16 @@
 <template id='list-page-template'>
-<div class="container mt-2">
-	<div class="row">
+<div class="container-fluid mt-2">
+<div class="row">
 	<div class="col-md-12" v-if='!loading'>
-		<h1>List #{{list_id}}: {{list.list.name}}</h1>
+		<h1><span tt='list_with_number' :tt1='list_id'></span>: {{list.list.name}}</h1>
 		<div>
 			<span>
-				Revision
+				<span tt='revision'></span>
 				<select v-model='revision_id' class="form-control" style="display:inline; width:auto;" @change='change_revision'>
 					<option v-for='revid in revisions' :value='revid'>{{revid}}</option>
 				</select>
 			</span>
+			<span style="margin-left:0.5rem;" tt='total_rows' :tt1='list.total'></span>
 		</div>
 		<list :list='list' :revision_id='revision_id'></list>
 	</div>
@@ -25,13 +26,15 @@ let ListPage = Vue.extend ( {
     props : ['list_id','initial_revision_id'] ,
     data : function () { return { list:{} , revision_id:0 , revisions:[] , loading:true } } ,
     created : function () {
-    	this.load_list(()=>this.loading=false)
+    	this.load_list(()=>{
+    	    this.fix_columns();
+    		this.loading=false
+    	})
     },
     updated : function () { tt.updateInterface(this.$el) } ,
     mounted : function () { tt.updateInterface(this.$el) } ,
     methods : {
     	change_revision() {
-    		console.log("Loading revision "+this.revision_id);
     		if ( this.revision_id==this.list.list.revision_id ) {
     			// Last (default) revision
     			this.$router.push ("/list/"+this.list.list.id);
@@ -54,6 +57,24 @@ let ListPage = Vue.extend ( {
                 })
                 .then(resolve)
         } ,
+		fix_columns() {
+            this.list.list.header.schema.columns.forEach(function(c,idx){
+            	if ( typeof c.label!='undefined' ) return ; // Already has a label
+            	if ( c.column_type=='WikiPage' ) {
+            		c.label = c.wiki.replace(/wiki$/,'') ;
+            		c.label = c.label.charAt(0).toUpperCase() + c.label.slice(1);
+            		if ( c.wiki=='wikidatawiki' ) {
+            			if (c.namespace_id==0) c.label += " item";
+            			else if (c.namespace_id==120) c.label += " property";
+            			else c.label += " page";
+            		} else if ( c.wiki=='commonswiki' ) {
+            			if (c.namespace_id==6) c.label += " file";
+            			else c.label += " page";
+            		} else c.label += " page";
+            	} else c.label = "Column "+idx;
+            });
+        } ,
+
     } ,
     template:'#list-page-template'
 } );

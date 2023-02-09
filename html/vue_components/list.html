@@ -1,5 +1,5 @@
 <template id='list-template'>
-<div class="container mt-2">
+<div class="container-fluid mt-2">
 	<div class="row">
 	<div class="col-md-12" v-if="!loading">
         <div class='row'>
@@ -8,24 +8,21 @@
 		<table v-if='rows.length>0' class="table">
             <tr>
                 <th tt='row_number'></th>
-                <th v-for='cell,cell_number in rows[0].c'>Column {{cell_number+1}}</th>
+                <th v-for='column in columns'>{{column.label}}</th>
                 <th tt='user'></th>
             </tr>
             <tr v-for="row in rows">
                 <td>{{row.row}}</td>
-                <td v-for="cell in row.c">
-                    {{cell}}
+                <td v-for="cell,idx in row.c">
+                    <cell :value='cell' :header='columns[idx]'></cell>
                 </td>
                 <td>
-                    {{list.users[row.user]}}
+                    <a :href="'https://www.wikidata.org/wiki/User:'+list.users[row.user]" class="wikidata">{{list.users[row.user]}}</a>
                 </td>
             </tr>
         </table>
         <div class='row'>
             <batch-navigator :batch_size='len' :total='list.total' :current='start/len' :batch_size_options='[25,50,100]' @set-current='move_to(len*$event)' @set-size='set_len($event)'></batch-navigator>
-        </div>
-        <div>
-            Showing rows {{start+1}}&ndash;{{start+len}} of {{list.total}}
         </div>
 	</div>
   </div>
@@ -38,23 +35,24 @@
 
 Vue.component ( 'list' , {
     props : ['list','revision_id'] ,
-    data : function () { return { start:0, len:25 , rows:[] , loading:true } } , //  list:{},
+    data : function () { return { start:0, len:25 , rows:[] , columns:[] , loading:true } } , //  list:{},
     created : function () {
+        this.columns = this.list.list.header.schema.columns; // To make access easier
         this.load_rows(()=>this.loading=false)
     } ,
     updated : function () { tt.updateInterface(this.$el) } ,
     mounted : function () { tt.updateInterface(this.$el) } ,
     methods : {
-        move_to: function ( new_start ) {
+        move_to( new_start ) {
             if ( new_start < 0 ) new_start = 0 ;
             this.start = new_start ;
             this.load_rows(()=>{})
         } ,
-        set_len: function ( new_len ) {
+        set_len( new_len ) {
             this.len = new_len;
             this.load_rows(()=>{}) 
         } ,
-        load_rows : function (resolve) {
+        load_rows(resolve) {
             let url = "/list/"+this.list.list.id+"?start="+this.start+"&len="+this.len;
             if ( typeof this.revision_id!='undefined') url += "&revision_id="+this.revision_id;
             fetch(url)
