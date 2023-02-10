@@ -5,6 +5,8 @@ use serde::Serialize;
 use mysql_async::{prelude::*, Conn};
 use serde_json::json;
 use crate::app_state::AppState;
+use crate::data_source::DataSource;
+use crate::data_source::DataSourceFormat;
 use crate::header::*;
 use crate::cell::*;
 use crate::row::*;
@@ -12,12 +14,6 @@ use crate::GenericError;
 
 const ROW_INSERT_BATCH_SIZE: usize = 1000;
 
-#[derive(Clone, Debug)]
-pub enum FileType {
-    TSV,
-    CSV,
-    JSONL,
-}
 
 #[derive(Clone, Debug, Serialize)]
 pub struct List {
@@ -94,13 +90,13 @@ impl List {
         Ok(row_number)
     }
 
-    pub async fn import_from_url(&self, url: &str, file_type: FileType, user_id: DbId) -> Result<(), GenericError> {
+    pub async fn import_from_url(&self, url: &str, file_type: DataSourceFormat, user_id: DbId) -> Result<(), GenericError> {
         let client = reqwest::Client::builder()
             .user_agent("gulp/0.1")
             .build()?;
         let text = client.get(url).send().await?.text().await?;
         let _ = match file_type {
-            FileType::JSONL => self.import_jsonl(&text, user_id).await?,
+            DataSourceFormat::JSONL => self.import_jsonl(&text, user_id).await?,
             _ => return Err("import_from_url: unsopported type {file_type}".into()),
         };
         Ok(())
@@ -170,6 +166,16 @@ impl List {
         transaction.commit().await?;
         rows.clear();
         Ok(())
+    }
+
+    pub async fn get_sources(&self) -> Result<Vec<DataSource>, GenericError> {
+        let list_id = self.id;
+        let sql = r#"SELECT id,list_id,source_type,source_format,location,user_id FROM data_source WHERE list_id=:list_id"#;
+        let sources = self.app.get_gulp_conn().await?
+            .exec_iter(sql,params! {list_id}).await?
+            .map_and_drop(|row| DataSource::from_row(&row)).await?
+            .iter().cloned().filter_map(|s|s).collect();
+        Ok(sources)
     }
 
     /// Checks if a revision_id increase is necessary.

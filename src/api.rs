@@ -65,6 +65,20 @@ async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
     (StatusCode::OK, Json(j)).into_response()
 }
 
+async fn list_sources(State(state): State<Arc<AppState>>, Path(id): Path<DbId>,) -> Response {
+    let list = match AppState::get_list(&state,id).await {
+        Some(list) => list,
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
+    };
+    let list = list.lock().await;
+    let sources = match list.get_sources().await {
+        Ok(sources) => sources,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error retrieving list sources: {}",e.to_string())}))).into_response(),
+    };
+    let j = json!({"status":"OK","sources":sources});
+    (StatusCode::OK, Json(j)).into_response()
+}
+
 async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>) -> Response {
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
@@ -74,7 +88,7 @@ async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>)
     let old_revision_id = list.revision_id;
     let new_revision_id = match list.snapshot().await {
         Ok(rev_id) => rev_id,
-        Err(e) => return (StatusCode::GONE ,Json(json!({"status":format!("Error creating snapshot: {}",e.to_string())}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error creating snapshot: {}",e.to_string())}))).into_response(),
     };
     let j = json!({
         "old_revision_id" : old_revision_id,
@@ -158,6 +172,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/list/rows/:id", get(list_rows))
         .route("/list/info/:id", get(list_info))
         .route("/list/snapshot/:id", get(list_snapshot))
+        .route("/list/sources/:id", get(list_sources))
 
         .route("/upload", post(upload))
 

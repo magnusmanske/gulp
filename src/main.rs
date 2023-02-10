@@ -11,6 +11,7 @@ pub mod api;
 pub mod app_state;
 pub mod oauth;
 pub mod database_session_store;
+pub mod data_source;
 pub mod header;
 pub mod cell;
 pub mod row;
@@ -62,7 +63,7 @@ async fn main() -> Result<(), GenericError> {
             let list = list.lock().await;
             //let revision_id = list.snapshot().await?;
             //println!("{revision_id:?}");
-            //list.import_from_url("https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",list::FileType::JSONL).await?;
+            //list.import_from_url("https://wikidata-todo.toolforge.org/file_candidates_hessen.txt",list::DataSourceFormat::JSONL).await?;
             let rev0 = list.get_rows_for_revision(0).await?;
             let rev1 = list.get_rows_for_revision(1).await?;
             let rev1_sub: Vec<_> = rev1.iter().filter(|row|row.row_num==5075).collect();
