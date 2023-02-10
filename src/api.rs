@@ -76,7 +76,12 @@ async fn list_sources(State(state): State<Arc<AppState>>, Path(id): Path<DbId>,)
         Ok(sources) => sources,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error retrieving list sources: {}",e.to_string())}))).into_response(),
     };
-    let j = json!({"status":"OK","sources":sources});
+    let user_ids = sources.iter().map(|s|s.user_id).collect();
+    let users = match list.get_users_by_id(&user_ids).await {
+        Ok(users) => users,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error retrieving user details: {}",e.to_string())}))).into_response(),
+    };
+    let j = json!({"status":"OK","sources":sources,"users":users});
     (StatusCode::OK, Json(j)).into_response()
 }
 

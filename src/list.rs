@@ -80,6 +80,21 @@ impl List {
         Ok(ret)
     }
 
+    pub async fn get_users_by_id(&self, user_ids: &Vec<DbId>) -> Result<HashMap<DbId,String>, GenericError> {
+        if user_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let user_ids: Vec<String> = user_ids.iter().map(|id|format!("{id}")).collect();
+        let user_ids = user_ids.join(",");
+        let sql = format!("SELECT DISTINCT user.id,user.name FROM `user` WHERE id IN ({user_ids}) AND id>:dummy");
+        let dummy = 0;
+        let ret = self.app.get_gulp_conn().await?
+            .exec_iter(sql,params! {dummy}).await?
+            .map_and_drop(|row| mysql_async::from_row::<(DbId,String)>(row)).await?
+            .into_iter().collect();
+        Ok(ret)
+    }
+
     pub async fn get_rows_in_revision(&self, revision_id: DbId) -> Result<usize, GenericError> {
         let sql = r#"SELECT count(*) FROM `row`
             WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id AND revision_id<=:revision_id)
