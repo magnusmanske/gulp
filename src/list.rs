@@ -7,6 +7,7 @@ use serde_json::json;
 use crate::app_state::AppState;
 use crate::data_source::DataSource;
 use crate::data_source::DataSourceFormat;
+use crate::data_source::DataSourceType;
 use crate::header::*;
 use crate::cell::*;
 use crate::row::*;
@@ -252,6 +253,16 @@ impl List {
         }
 
         Ok(None)
+    }
+
+    pub async fn update_from_source(&self, source: &DataSource, user_id: DbId) -> Result<(),GenericError> {
+        match source.source_type {
+            DataSourceType::URL => {
+                self.import_from_url(&source.location,source.source_format.to_owned(), user_id).await?;
+            }
+            DataSourceType::FILE => todo!()
+        }
+        Ok(())
     }
 
     async fn get_max_row_num(&self, conn: &mut Conn) -> Result<DbId, GenericError> {

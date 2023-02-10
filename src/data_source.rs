@@ -1,5 +1,7 @@
+use std::sync::Arc;
+use mysql_async::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::header::*;
+use crate::{header::*, app_state::AppState};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum DataSourceFormat {
@@ -57,5 +59,12 @@ impl DataSource {
             location: row.get(4)?,
             user_id: row.get(5)?,
         })
+    }
+
+    pub async fn from_db(app: &Arc<AppState>, source_id: DbId) -> Option<Self> {
+        let sql = r#"SELECT * FROM data_source WHERE id=:source_id"#;
+        app.get_gulp_conn().await.ok()?
+            .exec_iter(sql,params! {source_id}).await.ok()?
+            .map_and_drop(|row| Self::from_row(&row)).await.ok()?.get(0)?.to_owned()
     }
 }

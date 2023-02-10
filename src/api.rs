@@ -1,4 +1,5 @@
 use crate::app_state::AppState;
+use crate::data_source::DataSource;
 use crate::oauth::*;
 use crate::header::DbId;
 use csv::WriterBuilder;use serde_json::json;
@@ -76,6 +77,28 @@ async fn list_sources(State(state): State<Arc<AppState>>, Path(id): Path<DbId>,)
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error retrieving list sources: {}",e.to_string())}))).into_response(),
     };
     let j = json!({"status":"OK","sources":sources});
+    (StatusCode::OK, Json(j)).into_response()
+}
+
+async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path<DbId>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
+    let user_id = match get_user_id(&state,&cookies).await {
+        Some(user_id) => user_id,
+        None => return (StatusCode::OK, Json(json!({"status":"Could not get a user ID"}))).into_response()
+    };
+    let source = match DataSource::from_db(&state, source_id).await {
+        Some(source) => source,
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving source; No source #{source_id} perhaps?")}))).into_response(),
+    };
+    let list = match AppState::get_list(&state,source.list_id).await {
+        Some(list) => list,
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{} perhaps?",source.list_id)}))).into_response(),
+    };
+    let list = list.lock().await;
+    match list.update_from_source(&source, user_id).await {
+        Ok(_) => {}
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error updating from source: {}",e.to_string())}))).into_response(),
+    }
+    let j = json!({"status":"OK"});
     (StatusCode::OK, Json(j)).into_response()
 }
 
@@ -173,6 +196,8 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/list/info/:id", get(list_info))
         .route("/list/snapshot/:id", get(list_snapshot))
         .route("/list/sources/:id", get(list_sources))
+        
+        .route("/source/update/:source_id", get(source_update))
 
         .route("/upload", post(upload))
 
