@@ -32,6 +32,9 @@ ul.list-top li {
 						<img :src="download_icon_url"/>
 					</a>
 				</li>
+				<li>
+					<router-link :to="'/update/'+list.list.id" tt="update"></router-link>
+				</li>
 		</div>
 		<list :list='list' :revision_id='revision_id'></list>
 	</div>
