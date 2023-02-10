@@ -22,6 +22,7 @@ $(document).ready(function(){
             vue_components.loadComponents ( ['tool-translate','wd-link','commons-thumbnail',//'autodesc','wikidatamap','wd-date','tool-navbar',
                 'vue_components/main_page.html',
                 'vue_components/list_page.html',
+                'vue_components/import_page.html',
                 'vue_components/list.html',
                 'vue_components/cell.html',
                 'vue_components/batch-navigator.html',
@@ -41,6 +42,7 @@ $(document).ready(function(){
           { path: '/', component: MainPage },
           { path: '/list/:list_id', component: ListPage , props:true },
           { path: '/list/:list_id/:initial_revision_id', component: ListPage , props:true },
+          { path: '/import/:list_or_new', component: ImportPage , props:true },
 /*
           { path: '/group', component: CatalogGroup , props:true },
           { path: '/group/:key', component: CatalogGroup , props:true },

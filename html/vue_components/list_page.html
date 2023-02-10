@@ -29,7 +29,7 @@ ul.list-top li {
 						<option value='json' tt='json'></option>
 					</select>
 					<a :href="download_url" tt_title="download" :download="'gulp.list.'+list.list.id+'.'+list.revision_id+'.'+download_type">
-						<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Cloud_Download_-_The_Noun_Project.svg/32px-Cloud_Download_-_The_Noun_Project.svg.png"/>
+						<img :src="download_icon_url"/>
 					</a>
 				</li>
 		</div>
@@ -45,7 +45,9 @@ ul.list-top li {
 
 let ListPage = Vue.extend ( {
     props : ['list_id','initial_revision_id'] ,
-    data : function () { return { list:{} , revision_id:0 , revisions:[] , download_type:'tsv' , download_url:'' , loading:true } } ,
+    data : function () { return { list:{} , revision_id:0 , revisions:[] , download_type:'tsv' , download_url:'' , loading:true ,
+    	download_icon_url:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Cloud_Download_-_The_Noun_Project.svg/32px-Cloud_Download_-_The_Noun_Project.svg.png'
+	} } ,
     created : function () {
     	this.load_list(()=>{
     	    this.fix_columns();

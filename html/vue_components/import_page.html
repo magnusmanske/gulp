@@ -1,0 +1,75 @@
+<template id="import-page-template">
+<div class="container mt-2">
+<div class="row" v-if="list_or_new_is_valid">
+	<div class="col-md-12">
+		<h1 v-if="list_or_new=='new'" tt="import_as_new"></h1>
+		<h1 v-else tt="import_as_existing" :tt1="list_or_new"></h1>
+		<div>
+			<span tt="source_type" style="font-weight: bold;"></span>
+			<label>
+				<input type="radio" v-model="source_type" value="URL" />
+				<span tt="url"></span>
+			</label>
+			<label>
+				<input type="radio" v-model="source_type" value="FILE" />
+				<span tt="file"></span>
+			</label>
+
+			<span tt="source_format" style="font-weight: bold; margin-left:3rem;"></span>
+			<label>
+				<input type="radio" v-model="source_format" value="CSV" />
+				<span tt="csv"></span>
+			</label>
+			<label>
+				<input type="radio" v-model="source_format" value="TSV" />
+				<span tt="tsv"></span>
+			</label>
+			<label>
+				<input type="radio" v-model="source_format" value="JSONL" />
+				<span tt="jsonl"></span>
+				<a href="https://jsonlines.org/" target="_blank">ⓘ</a>
+			</label>
+		</div>
+
+		<div v-if="source_type=='URL'">
+			<input type="text" v-model="source_url" style="width:100%" tt_placeholder="url" />
+		</div>
+		<div v-else-if="source_type=='FILE'">
+			FILE TODO
+		</div>
+	</div>
+</div>
+<div v-else class="row" tt="invalid_parameter" :tt1="list_or_new">
+</div>
+</template>
+
+<script>
+"use strict";
+
+
+let ImportPage = Vue.extend ( {
+    props : ["list_or_new"] ,
+    data : function () { return { list_or_new_is_valid:false , list_id:0, source_type:"URL" , source_format:"TSV" , source_url:"" ,
+    	existing_sources:[]
+	} } ,
+    created : function () {
+    	if ( !isNaN(this.list_or_new) ) this.list_id = this.list_or_new*1;
+    	this.list_or_new_is_valid = this.list_or_new=="new" || !isNaN(this.list_or_new)  ;
+    	// TODO check if user has write access
+    	this.load_existing_sources() ;
+    },
+    updated : function () { tt.updateInterface(this.$el) } ,
+    mounted : function () { tt.updateInterface(this.$el) } ,
+    methods : {
+    	load_existing_sources() {
+    		if ( this.list_id==0 ) return ;
+    		let url = "/list/sources/"+this.list_id;
+            fetch(url)
+                .then((response) => response.json())
+                .then((d) => {
+                });
+    	}
+	} ,
+    template:"#import-page-template"
+} );
+</script>
