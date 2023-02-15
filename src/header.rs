@@ -60,7 +60,7 @@ impl HeaderSchema {
             .get(0)?.to_owned()
     }
 
-    fn from_row(row: &mysql_async::Row) -> Option<Self> {
+    pub fn from_row(row: &mysql_async::Row) -> Option<Self> {
         let json: String = row.get(2)?;
         let json: serde_json::Value = serde_json::from_str(&json).ok()?;
         let mut columns : Vec<HeaderColumn> = vec![];
