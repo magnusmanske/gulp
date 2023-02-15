@@ -1,7 +1,7 @@
 var router ;
 var app ;
 let wd = new WikiData() ;
-var user ;
+var user = { is_logged_in:false } ;
 
 
 
@@ -11,6 +11,7 @@ function set_user_data(d) {
         $("#user_greeting").text("");
         $("#login_logout").html("<span tt='login'></span>").attr("href","/auth/login");
     } else {
+        user.is_logged_in = true;
         $("#user_greeting").text(user.username);
         $("#login_logout").html("<span tt='logout'></span>").attr("href","/auth/logout");
     }
@@ -24,6 +25,7 @@ $(document).ready(function(){
                 'vue_components/list_page.html',
                 'vue_components/update_page.html',
                 'vue_components/create_list_page.html',
+                'vue_components/create_header_page.html',
                 'vue_components/list.html',
                 'vue_components/cell.html',
                 'vue_components/batch-navigator.html',
@@ -45,6 +47,7 @@ $(document).ready(function(){
           { path: '/list/:list_id/:initial_revision_id', component: ListPage , props:true },
           { path: '/update/:list_or_new', component: UpdatePage , props:true },
           { path: '/create/list', component: CreateListPage , props:true },
+          { path: '/create/header', component: CreateHeaderPage , props:true },
 /*
           { path: '/group', component: CatalogGroup , props:true },
           { path: '/group/:key', component: CatalogGroup , props:true },

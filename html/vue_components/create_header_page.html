@@ -1,0 +1,114 @@
+<style>
+.short-form-control {
+	display:inline;
+	width:auto;
+}
+ .margin-left {
+ 	margin-left: 0.5rem;
+ }
+</style>
+
+<template id="create-header-page-template">
+	<div class="container mt-2">
+	<div v-if="!user().is_logged_in" class="row" tt="log_in_for_actions">
+	</div>
+	<div v-if="user().is_logged_in" class="row">
+		<div class="col-md-12">
+			<h1 tt="create_new_header"></h1>
+			<form @submit.prevent="submit_form" class="form-inline">
+				<div>
+					<span tt="name"></span>
+					<input type="text" class="form-control" v-model="name" tt_placeholder="new_header_name" style="width:15rem" />
+				</div>
+				<input type="submit" :class="'btn btn-outline-primary'" tt_value="create_new_header" />
+				<span v-if="message!=''" style="margin-left:1rem; color:red;">
+					{{message}}
+				</span>
+			</form>
+		</div>
+	</div>
+	<div v-if="user().is_logged_in" class="row" style="margin-top: 2rem;">
+		<div class="col-md-12">
+			<h2 tt="columns"></h2>
+			<table class="table">
+				<tr v-for="col,col_idx in columns">
+					<th>
+						{{col_idx+1}}
+					</th>
+					<td style="width:100%;">
+						<select v-model="col.column_type" class="form-control short-form-control">
+							<option value="WikiPage" tt="wikipage"></option>
+							<option value="String" tt="string"></option>
+						</select>
+						<span v-if="col.column_type=='WikiPage'" class="margin-left">
+							<span tt="wiki"></span><input type="text" v-model="col.wiki" class="form-control short-form-control" />
+							<span tt="namespace_id"></span><input type="text" v-model="col.namespace_id" class="form-control short-form-control" />
+						</span>
+						<span v-else-if="col.column_type=='String'" class="margin-left">
+							<!-- Nothing -->
+						</span>
+					</td>
+					<td>
+						<button class="btn btn-outline-danger" tt="delete" @click.prevent="columns.splice(col_idx,1)"></button>
+					</td>
+				</td>
+			</table>
+			<button class="btn btn-outline-success" tt="new" @click.prevent="create_new_column"></button>
+		</div>
+	</div>
+	</div>
+</template>
+	
+<script>
+"use strict";
+
+
+let CreateHeaderPage = Vue.extend ( {
+	props : [] ,
+	data : function () { return { name:"" , message:'' , columns:[] } } ,
+	created : function () {
+		this.create_new_column();
+	},
+	updated : function () { tt.updateInterface(this.$el) } ,
+	mounted : function () { tt.updateInterface(this.$el) } ,
+	methods : {
+		submit_form() {
+			this.name = this.name.trim();
+			if ( this.name=="" ) {
+				this.message = tt.t("name_required") ;
+				return ;
+			}
+			if ( this.columns.length==0 ) {
+				this.message = tt.t("columns_required") ;
+				return ;
+			}
+			this.message = "";
+			let payload = {
+				name: this.name,
+				json: JSON.stringify({ "columns": this.columns })
+			};
+			let url = "/header/schema/new?"+encodeURIComponent(payload.name)+"&json="+encodeURIComponent(payload.json);
+			console.log(url);
+            fetch(url)
+                .then((response) => response.json())
+                .then((d) => {
+                	if ( d.status=="OK" ) {
+                		alert(tt.t("successfully_created"))
+                		this.name = "" ;
+                		this.columns = [] ;
+                		this.create_new_column();
+                	} else {
+                		this.message = d.status;
+                	}
+                })
+		} ,
+		create_new_column() {
+			this.columns.push({
+				column_type:"WikiPage"
+			});
+		},
+		user() { return user??{is_logged_in:false} }
+	} ,
+	template:"#create-header-page-template"
+} );
+</script>

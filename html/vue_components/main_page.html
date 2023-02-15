@@ -5,7 +5,7 @@
 		<h1 tt="toolname"></h1>
     	<p tt="tooldesc"></p>
 
-        <div v-if="user()!=null">
+        <div v-if="user().is_logged_in">
             <h2 tt="actions"></h2>
             <ul>
                 <li>
@@ -63,7 +63,7 @@ let MainPage = Vue.extend ( {
                 else this.no_lists_for_user = true;
             });
         } ,
-        user() { return user }
+        user() { return user??{is_logged_in:false} }
     } ,
     template:'#main-page-template'
 } );
