@@ -127,10 +127,10 @@ async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>)
 }
 
 async fn header_schemas(State(state): State<Arc<AppState>>,) -> Response {
-    let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE id>dummy"#;
+    let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE id>:dummy"#;
     let dummy = 0;
     let hs: Vec<crate::header::HeaderSchema> = state.get_gulp_conn().await.unwrap()
-        .exec_iter(sql,params! {dummy}).await.ok().unwrap()
+        .exec_iter(sql,params! {dummy}).await.unwrap()
         .map_and_drop(|row| crate::header::HeaderSchema::from_row(&row)).await.unwrap()
         .iter().filter_map(|s|s.to_owned()).collect();
     let j = json!({"status":"OK","data":hs});
