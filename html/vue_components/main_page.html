@@ -4,9 +4,20 @@
 	<div class="col-md-12">
 		<h1 tt="toolname"></h1>
     	<p tt="tooldesc"></p>
-        <div v-if='no_lists_for_user' tt='no_lists_for_user'>
+
+        <div v-if="user()!=null">
+            <h2 tt="actions"></h2>
+            <ul>
+                <li>
+                    <router-link to="/create/list" tt="create_new_list"></router-link>
+                </li>
+            </ul>
         </div>
+        <div v-else tt="log_in_for_actions"></div>
+
+        <div v-if='no_lists_for_user' tt='no_lists_for_user'></div>
         <div v-else>
+            <h2 tt="your_lists"></h2>
             <table class="table">
                 <tr>
                     <th>#</th>
@@ -44,14 +55,15 @@ let MainPage = Vue.extend ( {
     updated : function () { tt.updateInterface(this.$el) } ,
     mounted : function () { tt.updateInterface(this.$el) } ,
     methods : {
-        load_user_lists: function() {
+        load_user_lists() {
             fetch("/auth/lists/write,admin")
             .then((response) => response.json())
             .then((d) => {
                 if ( d.status=="OK" ) this.user_lists = d.lists;
                 else this.no_lists_for_user = true;
             });
-        }
+        } ,
+        user() { return user }
     } ,
     template:'#main-page-template'
 } );

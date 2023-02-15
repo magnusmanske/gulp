@@ -1,9 +1,13 @@
-<template id="import-page-template">
+<template id="update-page-template">
 	<div class="container mt-2">
 	<div class="row" v-if="list_or_new_is_valid">
 		<div class="col-md-12">
 			<h1 v-if="list_or_new=='new'" tt="import_as_new"></h1>
-			<h1 v-else tt="import_as_existing" :tt1="list_or_new"></h1>
+			<h1 v-else>
+				<span tt="update"></span>
+				<router-link :to="'/list/'+list_id" tt="list_number" :tt1="list_id"></router-link>
+			</h1>
+
 	
 			<div v-if="loading"></div>
 			<div v-if="existing_sources.length>0">
@@ -25,10 +29,14 @@
 							</span>
 							<span v-else>{{source.location}}</span>
 						</td>
-						<td>{{source.user_id}}</td>
+						<td>
+							<router-link :to="'/user/'+source.user_id">{{users[source.user_id]}}</router-link>
+						</td>
 						<td>
 							<div v-if="(source.status??'')==''">
-								<button v-if="source.source_type=='URL'" class="btn btn-outline-success" tt="update_from_existing_source" @click.prevent="update_from_existing_source(source)"></button>
+								<button v-if="source.source_type=='URL'" class="btn btn-outline-success" tt_title="update_from_existing_source" @click.prevent="update_from_existing_source(source)">
+									<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Icon_-_Update.svg/24px-Icon_-_Update.svg.png" />
+								</button>
 							</div>
 							<div v-else>
 								<i>{{source.status}}</i>
@@ -41,6 +49,7 @@
 			</div>
 	
 			<div>
+				<h2 tt="create_new_source"></h2>
 				<span tt="source_type" style="font-weight: bold;"></span>
 				<label>
 					<input type="radio" v-model="source_type" value="URL" />
@@ -77,52 +86,53 @@
 	</div>
 	<div v-else class="row" tt="invalid_parameter" :tt1="list_or_new">
 	</div>
-	</template>
+</template>
 	
-	<script>
-	"use strict";
-	
-	
-	let ImportPage = Vue.extend ( {
-		props : ["list_or_new"] ,
-		data : function () { return { list_or_new_is_valid:false , list_id:0, source_type:"URL" , source_format:"TSV" , source_url:"" ,
-			existing_sources:[] , loading:true
-		} } ,
-		created : function () {
-			if ( !isNaN(this.list_or_new) ) this.list_id = this.list_or_new*1;
-			this.list_or_new_is_valid = this.list_or_new=="new" || !isNaN(this.list_or_new)  ;
-			// TODO check if user has write access
-			this.load_existing_sources() ;
-		},
-		updated : function () { tt.updateInterface(this.$el) } ,
-		mounted : function () { tt.updateInterface(this.$el) } ,
-		methods : {
-			load_existing_sources() {
-				if ( this.list_id==0 ) return ;
-				let url = "/list/sources/"+this.list_id;
-				fetch(url)
-					.then((response) => response.json())
-					.then((d) => {
-						if ( d.status=="OK" ) {
-							this.existing_sources = d.sources;
-						} else {
-							// TODO error
-							console.log(d);
-						}
-						this.loading = false;
-					});
-			} ,
-			update_from_existing_source(source) {
-				source.status = 'running';
-				let url = "/source/update/"+source.id;
-				fetch(url)
-					.then((response) => response.json())
-					.then((d) => {
-						if ( d.status=='OK' ) source.status = '';
-						else source.status = d.status ;
-					})
-			},
+<script>
+"use strict";
+
+
+let UpdatePage = Vue.extend ( {
+	props : ["list_or_new"] ,
+	data : function () { return { list_or_new_is_valid:false , list_id:0, source_type:"URL" , source_format:"TSV" , source_url:"" ,
+		existing_sources:[] , users:{} , loading:true
+	} } ,
+	created : function () {
+		if ( !isNaN(this.list_or_new) ) this.list_id = this.list_or_new*1;
+		this.list_or_new_is_valid = this.list_or_new=="new" || !isNaN(this.list_or_new)  ;
+		// TODO check if user has write access
+		this.load_existing_sources() ;
+	},
+	updated : function () { tt.updateInterface(this.$el) } ,
+	mounted : function () { tt.updateInterface(this.$el) } ,
+	methods : {
+		load_existing_sources() {
+			if ( this.list_id==0 ) return ;
+			let url = "/list/sources/"+this.list_id;
+			fetch(url)
+				.then((response) => response.json())
+				.then((d) => {
+					if ( d.status=="OK" ) {
+						this.users = d.users;
+						this.existing_sources = d.sources;
+					} else {
+						// TODO error
+						console.log(d);
+					}
+					this.loading = false;
+				});
 		} ,
-		template:"#import-page-template"
-	} );
-	</script>
+		update_from_existing_source(source) {
+			source.status = 'running';
+			let url = "/source/update/"+source.id;
+			fetch(url)
+				.then((response) => response.json())
+				.then((d) => {
+					if ( d.status=='OK' ) source.status = '';
+					else source.status = d.status ;
+				})
+		},
+	} ,
+	template:"#update-page-template"
+} );
+</script>

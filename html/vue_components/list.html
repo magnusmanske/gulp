@@ -17,7 +17,7 @@
                     <cell :value='cell' :header='columns[idx]'></cell>
                 </td>
                 <td>
-                    <a :href="'https://www.wikidata.org/wiki/User:'+list.users[row.user]" class="wikidata">{{list.users[row.user]}}</a>
+                    <router-link :to="'/user/'+row.user">{{list.users[row.user]}}</router-link>
                 </td>
             </tr>
         </table>
