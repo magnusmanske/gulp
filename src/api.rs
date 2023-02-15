@@ -2,6 +2,7 @@ use crate::app_state::AppState;
 use crate::data_source::DataSource;
 use crate::oauth::*;
 use crate::header::DbId;
+use mysql_async::prelude::*;
 use csv::WriterBuilder;use serde_json::json;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -125,6 +126,17 @@ async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>)
     (StatusCode::OK, Json(j)).into_response()
 }
 
+async fn header_schemas(State(state): State<Arc<AppState>>,) -> Response {
+    let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE id>dummy"#;
+    let dummy = 0;
+    let hs: Vec<crate::header::HeaderSchema> = state.get_gulp_conn().await.unwrap()
+        .exec_iter(sql,params! {dummy}).await.ok().unwrap()
+        .map_and_drop(|row| crate::header::HeaderSchema::from_row(&row)).await.unwrap()
+        .iter().filter_map(|s|s.to_owned()).collect();
+    let j = json!({"status":"OK","data":hs});
+    (StatusCode::OK, Json(j)).into_response()
+}
+
 async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
     let format: String = params.get("format").unwrap_or(&"json".into()).into();
     let start: u64 = params.get("start").map(|s|s.parse::<u64>().unwrap_or(0)).unwrap_or(0);
@@ -201,7 +213,9 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/list/info/:id", get(list_info))
         .route("/list/snapshot/:id", get(list_snapshot))
         .route("/list/sources/:id", get(list_sources))
-        
+
+        .route("/header/schemas", get(header_schemas))
+
         .route("/source/update/:source_id", get(source_update))
 
         .route("/upload", post(upload))
