@@ -19,9 +19,6 @@ ul.list-top li {
 					</select>
 				</li>
 				<li style="padding-top:0.4rem;" tt='total_rows' :tt1='list.total'></li>
-				<li style="padding-top:0.4rem;">
-					<button class="btn btn-outline-secondary" href="#" @click.prevent="snapshot" tt='snapshot' style="margin-top: -0.4rem;"></button>
-				</li>
 				<li>
 					<select v-model="download_type" class="form-control" style="display: inline-block; width: auto;" @change="set_download_url">
 						<option value='csv' tt='csv'></option>
@@ -32,8 +29,11 @@ ul.list-top li {
 						<img :src="download_icon_url"/>
 					</a>
 				</li>
+				<li style="padding-top:0.4rem; margin-left:3rem;">
+					<button class="btn btn-outline-secondary" href="#" @click.prevent="snapshot" tt='snapshot' style="margin-top: -0.4rem;"></button>
+				</li>
 				<li>
-					<router-link :to="'/update/'+list.list.id" tt="update"></router-link>
+					<router-link class="btn btn-outline-secondary" :to="'/update/'+list.list.id" tt="update"></router-link>
 				</li>
 		</div>
 		<list :list='list' :revision_id='revision_id'></list>
@@ -83,6 +83,7 @@ let ListPage = Vue.extend ( {
                 	if ( d.old_revision_id==d.new_revision_id) {
                 		alert(tt.t("no_new_revision").replace('$1',this.list.revision_id))
                 	} else {
+                		this.revisions.unshift(d.new_revision_id);
                 		this.list.list.revision_id = d.new_revision_id;
                 		this.revision_id = d.new_revision_id;
                 		this.change_revision()
