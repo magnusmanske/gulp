@@ -35,12 +35,12 @@ pub struct HeaderColumn {
 
 impl HeaderColumn {
     pub fn from_value(value: &serde_json::Value) -> Option<Self> {
-        let o = value.as_object()?;
+        let ct = value.get("column_type")?.as_str()?;
         Some(Self{
-            column_type: ColumnType::from_str(o.get("column_type")?.as_str()?)?,
-            wiki: o.get("wiki").map(|s|s.to_string()),
-            namespace_id: Self::value_option_to_namespace_id(o.get("namespace_id")),
-            string: o.get("string").map(|s|s.to_string()),
+            column_type: ColumnType::from_str(ct)?,
+            wiki: value.get("wiki").map(|s|s.to_string()),
+            namespace_id: Self::value_option_to_namespace_id(value.get("namespace_id")),
+            string: value.get("string").map(|s|s.to_string()),
         })
     }
 
@@ -82,7 +82,7 @@ impl HeaderSchema {
         let json: String = row.get(2)?;
         let json: serde_json::Value = serde_json::from_str(&json).ok()?;
         let mut columns : Vec<HeaderColumn> = vec![];
-        for column in json.as_object()?.get("columns")?.as_array()? {
+        for column in json.get("columns")?.as_array()? {
             columns.push(HeaderColumn::from_value(column)?);
         }
         Some(Self {
@@ -132,16 +132,17 @@ impl Header {
     }
 
     pub async fn from_list_revision_id(conn: &mut Conn, list_id: DbId, revision_id: DbId) -> Option<Self> {
-        let sql = r#"SELECT id,list_id,revision_id,header_schema_id FROM header WHERE list_id=:list_id AND revision_id<=:revision_id ORDER BY list_id DESC LIMIT 1"#;
+        let sql = r#"SELECT id,list_id,revision_id,header_schema_id FROM header WHERE list_id=:list_id AND revision_id<=:revision_id ORDER BY revision_id DESC LIMIT 1"#;
         let result = conn
             .exec_iter(sql,params! {list_id,revision_id}).await.ok()?
             .map_and_drop(|row| mysql_async::from_row::<(DbId,DbId,DbId,DbId)>(row)).await.ok()?
             .get(0)?.to_owned();
+        let hs = HeaderSchema::from_id(conn, result.3).await;
         Some(Self {
             id: result.0,
             list_id: result.1, 
             revision_id: result.2, 
-            schema: HeaderSchema::from_id(conn, result.3).await?,
+            schema: hs?,
         })
     }
 }

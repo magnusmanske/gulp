@@ -39,12 +39,13 @@ impl List {
 
     pub async fn from_row(app: &Arc<AppState>, row: &mysql_async::Row, list_id: DbId) -> Option<Self> {
         let mut conn = app.get_gulp_conn().await.ok()?;
+        let header = Header::from_list_id(&mut conn, list_id).await?;
         Some(Self {
             app: app.clone(),
             id: row.get(0)?,
             name: row.get(1)?,
             revision_id: row.get(2)?,
-            header: Header::from_list_id(&mut conn, list_id).await?,
+            header: header,
         })
     }
 
@@ -292,5 +293,20 @@ impl List {
             Some(result) => Ok(*result),
             None => Ok(0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_state::*;
+
+    #[tokio::test]
+    async fn test_from_id() {
+        let app = AppState::from_config_file("config.json").expect("app creation failed");
+        let app = Arc::new(app);
+        let list = List::from_id(&app, 4).await.unwrap();
+        assert_eq!(list.id,4);
+        assert_eq!(list.name,"File candidates Hessen");
     }
 }
