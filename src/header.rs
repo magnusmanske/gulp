@@ -1,5 +1,8 @@
 use mysql_async::{prelude::*, Conn};
 use serde::Serialize;
+use serde_json::json;
+
+use crate::app_state::AppState;
 
 pub type NamespaceType = i64;
 pub type DbId = u64;
@@ -26,6 +29,7 @@ impl ColumnType {
 pub struct HeaderColumn {
     pub column_type: ColumnType,
     pub wiki: Option<String>,
+    pub string: Option<String>,
     pub namespace_id: Option<NamespaceType>,
 }
 
@@ -34,8 +38,9 @@ impl HeaderColumn {
         let o = value.as_object()?;
         Some(Self{
             column_type: ColumnType::from_str(o.get("type")?.as_str()?)?,
-            wiki: o["wiki"].as_str().map(|s|s.to_string()),
+            wiki: o.get("wiki").map(|s|s.to_string()),
             namespace_id: Self::value_option_to_namespace_id(o.get("namespace_id")),
+            string: o.get("string").map(|s|s.to_string()),
         })
     }
 
@@ -60,6 +65,19 @@ impl HeaderSchema {
             .get(0)?.to_owned()
     }
 
+    pub fn from_name_json(name: &str, json: &str) -> Option<Self> {
+        let json: serde_json::Value = serde_json::from_str(json).ok()?;
+        let mut columns : Vec<HeaderColumn> = vec![];
+        for column in json.as_object()?.get("columns")?.as_array()? {
+            columns.push(HeaderColumn::from_value(column)?);
+        }
+        Some(Self {
+            id: 0,
+            name: name.to_string(),
+            columns,
+        })
+    }
+
     pub fn from_row(row: &mysql_async::Row) -> Option<Self> {
         let json: String = row.get(2)?;
         let json: serde_json::Value = serde_json::from_str(&json).ok()?;
@@ -72,6 +90,31 @@ impl HeaderSchema {
             name: row.get(1)?,
             columns,
         })
+    }
+
+    pub async fn create_in_db(&mut self, app: &std::sync::Arc<AppState>) -> Result<DbId,crate::GenericError> {
+        if self.id!=0 {
+            return Err("create_in_db: Already has an id".into());
+        }
+        let mut conn = app.get_gulp_conn().await?;
+
+        // Check if there is already a header schema with that exact JSON
+        let name = self.name.to_string();
+        let json = json!({"columns":self.columns}).to_string();
+        let sql = "SELECT id,name,json FROM `header_schema` WHERE `json`=:json" ;
+        if let Some(hs) = conn.exec_iter(sql,params! {json}).await?.map_and_drop(|row| Self::from_row(&row)).await?.get(0) {
+            let hs = hs.to_owned().unwrap();
+            return Err(format!("create_in_db: A header schema with this JSON already exist: #{}: {}",hs.id,hs.name).into());
+        }
+
+        // Create new row
+        let json = json!({"columns":self.columns}).to_string();
+        let sql = r#"INSERT INTO `header_schema` (`name`,`json`) VALUES (:name,:json)"# ;
+        conn.exec_drop(sql, params!{name,json}).await?;
+        if let Some(id) = conn.last_insert_id() {
+            self.id = id
+        }
+        Ok(self.id)
     }
 }
 

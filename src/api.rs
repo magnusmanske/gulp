@@ -137,6 +137,38 @@ async fn header_schemas(State(state): State<Arc<AppState>>,) -> Response {
     (StatusCode::OK, Json(j)).into_response()
 }
 
+fn json_error(s: &str) -> Response {
+    (StatusCode::OK ,Json(json!({"status":s}))).into_response()
+}
+
+async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
+    let _user_id = match get_user_id(&state,&cookies).await {
+        Some(user_id) => user_id,
+        None => return json_error("You need to be logged in")
+    };
+    let name = match params.get("name") {
+        Some(name) => name.to_owned(),
+        None => return json_error("A name is required")
+    };
+    let json_string = match params.get("json") {
+        Some(json_string) => json_string.to_owned(),
+        None => return json_error("JSON is required")
+    };
+    let json: serde_json::Value = match serde_json::from_str(&json_string) {
+        Ok(json) => json,
+        Err(e) => return json_error(&e.to_string())
+    };
+    let mut hs = match crate::header::HeaderSchema::from_name_json(&name, &json.to_string()) {
+        Some(hs) => hs,
+        None => return json_error("Invalid JSON")
+    };
+    match hs.create_in_db(&state).await {
+        Ok(0) => json_error("INSERT was run but no new ID was returned"),
+        Ok(_id) => json_error("OK"),
+        Err(e) => json_error(&e.to_string()),
+    }
+}
+
 async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
     let format: String = params.get("format").unwrap_or(&"json".into()).into();
     let start: u64 = params.get("start").map(|s|s.parse::<u64>().unwrap_or(0)).unwrap_or(0);
@@ -215,6 +247,8 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/list/sources/:id", get(list_sources))
 
         .route("/header/schemas", get(header_schemas))
+        .route("/header/schema/new", get(new_header_schema))
+        
 
         .route("/source/update/:source_id", get(source_update))
 
