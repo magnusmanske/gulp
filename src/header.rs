@@ -7,7 +7,7 @@ use crate::app_state::AppState;
 pub type NamespaceType = i64;
 pub type DbId = u64;
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum ColumnType {
     String,
     WikiPage,
@@ -16,8 +16,8 @@ pub enum ColumnType {
 impl ColumnType {
     fn from_str(s: &str) -> Option<Self> {
         match s {
-            "string" => Some(Self::String),
-            "page" => Some(Self::WikiPage),
+            "String" => Some(Self::String),
+            "WikiPage" => Some(Self::WikiPage),
             _ => None
         }
     }
@@ -37,7 +37,7 @@ impl HeaderColumn {
     pub fn from_value(value: &serde_json::Value) -> Option<Self> {
         let o = value.as_object()?;
         Some(Self{
-            column_type: ColumnType::from_str(o.get("type")?.as_str()?)?,
+            column_type: ColumnType::from_str(o.get("column_type")?.as_str()?)?,
             wiki: o.get("wiki").map(|s|s.to_string()),
             namespace_id: Self::value_option_to_namespace_id(o.get("namespace_id")),
             string: o.get("string").map(|s|s.to_string()),
@@ -68,7 +68,7 @@ impl HeaderSchema {
     pub fn from_name_json(name: &str, json: &str) -> Option<Self> {
         let json: serde_json::Value = serde_json::from_str(json).ok()?;
         let mut columns : Vec<HeaderColumn> = vec![];
-        for column in json.as_object()?.get("columns")?.as_array()? {
+        for column in json.get("columns")?.as_array()? {
             columns.push(HeaderColumn::from_value(column)?);
         }
         Some(Self {
@@ -143,5 +143,20 @@ impl Header {
             revision_id: result.2, 
             schema: HeaderSchema::from_id(conn, result.3).await?,
         })
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_name_json() {
+        let json_string = r#"{"columns":[{"column_type":"WikiPage"}]}"#;
+        let hs = HeaderSchema::from_name_json("Test",&json_string).unwrap();
+        assert_eq!(hs.name,"Test");
+        assert_eq!(hs.columns.len(),1);
+        assert_eq!(hs.columns[0].column_type,ColumnType::WikiPage);
     }
 }
