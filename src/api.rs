@@ -160,7 +160,7 @@ async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Qu
     };
     let mut hs = match crate::header::HeaderSchema::from_name_json(&name, &json.to_string()) {
         Some(hs) => hs,
-        None => return json_error("Invalid JSON")
+        None => return json_error(&format!("Invalid JSON: {json:?}"))
     };
     match hs.create_in_db(&state).await {
         Ok(0) => json_error("INSERT was run but no new ID was returned"),
