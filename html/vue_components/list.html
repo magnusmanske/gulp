@@ -11,7 +11,7 @@
                 <th v-for='column in columns'>{{column.label}}</th>
                 <th tt='user'></th>
             </tr>
-            <tr v-for="row in rows">
+            <tr v-for="row in rows" :key="row.row">
                 <td>{{row.row}}</td>
                 <td v-for="cell,idx in row.c">
                     <cell :value='cell' :header='columns[idx]'></cell>

@@ -36,7 +36,7 @@ Vue.component ( 'cell' , {
     		if ( typeof v=="string" ) v = {"title":v};
     		v.wiki = v.wiki ?? this.header.wiki;
     		v.namespace_id = v.namespace_id ?? this.header.namespace_id ?? 0;
-    		this.v = v;
+    		ns_cache.load_namespaces([v.wiki],()=>{this.v = v;});
     	} else this.v = this.value;
     	//console.log(JSON.parse(JSON.stringify(this.header)))
     },
@@ -51,13 +51,7 @@ Vue.component ( 'cell' , {
     		return url;
     	} ,
     	get_server_for_wiki(wiki) {
-    		if ( wiki=="wikidatawiki" ) return "www.wikidata.org";
-    		if ( wiki=="commonswiki" ) return "commons.wikimedia.org";
-    		if ( wiki=="specieswiki" ) return "species.wikimedia.org";
-    		if ( wiki=="metawiki" ) return "meta.wikimedia.org";
-    		let server = wiki.replace(/wiki$/,".wikipedia.org");
-    		if (wiki!=server) return server;
-    		return wiki.replace(/^(.+)(wik.+)$/,"$1.$2.org");
+    		return ns_cache.get_server_for_wiki(wiki);
     	}
     } ,
     template : '#cell-template'

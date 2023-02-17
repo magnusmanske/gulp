@@ -4,6 +4,30 @@ let wd = new WikiData() ;
 var user = { is_logged_in:false } ;
 
 
+var ns_cache = {
+    cache: {},
+    loading: {},
+    load_namespaces(wikis,callback) {
+        let self = this;
+        let to_load = [] ;
+        wikis.forEach(function(wiki){
+            if ( typeof self.cache[wiki]=='undefined') to_load.push(wiki);
+        });
+        if ( to_load.length==0 ) return callback();
+        console.log(to_load);
+        callback();// TODO
+    } ,
+    get_server_for_wiki(wiki) {
+        if ( wiki=="wikidatawiki" ) return "www.wikidata.org";
+        if ( wiki=="commonswiki" ) return "commons.wikimedia.org";
+        if ( wiki=="specieswiki" ) return "species.wikimedia.org";
+        if ( wiki=="metawiki" ) return "meta.wikimedia.org";
+        let server = wiki.replace(/wiki$/,".wikipedia.org");
+        if (wiki!=server) return server;
+        return wiki.replace(/^(.+)(wik.+)$/,"$1.$2.org");
+    }
+
+};
 
 function set_user_data(d) {
     user = d.user;
