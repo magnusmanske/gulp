@@ -53,7 +53,7 @@
 					</td>
 				</td>
 			</table>
-			<button class="btn btn-outline-success" tt="new" @click.prevent="create_new_column"></button>
+			<button class="btn btn-outline-success" tt="create_new_column" @click.prevent="create_new_column"></button>
 		</div>
 	</div>
 	</div>
@@ -87,7 +87,7 @@ let CreateHeaderPage = Vue.extend ( {
 				name: this.name,
 				json: JSON.stringify({ "columns": this.columns })
 			};
-			let url = "/header/schema/new?"+encodeURIComponent(payload.name)+"&json="+encodeURIComponent(payload.json);
+			let url = "/header/schema/new?name="+encodeURIComponent(payload.name)+"&json="+encodeURIComponent(payload.json);
 			console.log(url);
             fetch(url)
                 .then((response) => response.json())

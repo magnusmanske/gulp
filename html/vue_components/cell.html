@@ -8,7 +8,7 @@
 			<span style="text-align: center; width:120px; display: inline-block;">
 				<commons-thumbnail :filename="value" width="120" :key="value"></commons-thumbnail>
 			</span>
-			<span style="margin-left:0.5rem;">{{value}}</span>
+			<span style="margin-left:0.5rem; vertical-align: top;">{{value}}</span>
 		</span>
 		<span v-else>
 			{{value}}
@@ -31,7 +31,7 @@ Vue.component ( 'cell' , {
     props : [ 'header' , 'value' ] ,
     data : function () { return {} } ,
     created : function () {
-    	//console.log(JSON.parse(JSON.stringify(this.header)))
+    	console.log(JSON.parse(JSON.stringify(this.header)))
     },
     updated : function () { tt.updateInterface(this.$el) } ,
     mounted : function () { tt.updateInterface(this.$el) } ,

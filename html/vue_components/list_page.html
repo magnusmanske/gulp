@@ -107,7 +107,7 @@ let ListPage = Vue.extend ( {
 		fix_columns() {
             this.list.list.header.schema.columns.forEach(function(c,idx){
             	if ( typeof c.label!='undefined' ) return ; // Already has a label
-            	if ( c.column_type=='WikiPage' ) {
+            	if ( c.column_type=='WikiPage' && c.wiki!=null ) {
             		c.label = c.wiki.replace(/wiki$/,'') ;
             		c.label = c.label.charAt(0).toUpperCase() + c.label.slice(1);
             		if ( c.wiki=='wikidatawiki' ) {
