@@ -29,7 +29,8 @@ async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Co
     let cookie = cookies.to_owned()?.get(COOKIE_NAME)?.to_string();
     let session = state.store.load_session(cookie).await.ok()??;
     let j = json!(session).get("data").cloned()?;
-    let j = j.get("user").unwrap();
+    let mut j = j.get("user")?.to_owned();
+    j["id"] = json!(state.get_or_create_wiki_user_id(j.get("username")?.as_str()?).await?);
     serde_json::from_str(j.as_str()?).ok()
 }
 
