@@ -28,6 +28,27 @@ pub struct List {
 }
 
 impl List {
+    pub async fn create_new(app: &Arc<AppState>, name: &str, header_schema_id: DbId) -> Option<Self> {
+        let mut conn = app.get_gulp_conn().await.ok()?;
+        let header_schema = HeaderSchema::from_id(&mut conn, header_schema_id).await?;
+
+        let sql = "INSERT INTO `list` (`name`) VALUES (:name)" ;
+        conn.exec_drop(sql, params!{name}).await.ok()?;
+        let list_id = conn.last_insert_id()?;
+        
+        let mut header = Header { id: 0, list_id, revision_id: 0, schema: header_schema };
+        let _ = header.create_in_db(app).await.ok()?;
+        
+        Self::from_id(app, list_id).await
+    }
+
+    pub async fn add_access(&self, app: &Arc<AppState>, user_id: DbId, access: &str) -> Result<(),GenericError> {
+        let list_id = self.id;
+        let sql = "INSERT IGNORE INTO `access` (list_id,user_id,right) VALUES (:list_id,:user_id,:access)";
+        app.get_gulp_conn().await?.exec_drop(sql, params!{list_id,user_id,access}).await?;
+        Ok(())
+    }
+
     pub async fn from_id(app: &Arc<AppState>, list_id: DbId) -> Option<Self> {
         let sql = r#"SELECT id,name,revision_id FROM `list` WHERE id=:list_id"#;
         let row = app.get_gulp_conn().await.ok()?
@@ -222,17 +243,6 @@ impl List {
 
     async fn check_json_exists(&self, _conn: &mut Conn, _json_text: &str, _json_md5: &str) -> Result<bool, GenericError> {
         // Already checked via md5, might have to implement if collisions occur
-        /*
-            let list_id = self.id;
-            let sql = "SELECT id FROM `row`
-                WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)
-                AND list_id=:list_id
-                AND json_md5=:json_md5
-                AND json=:json_text";
-            Ok(!conn
-                .exec_iter(sql,params! {list_id,json_text,json_md5}).await?
-                .map_and_drop(|_row| 1).await?.is_empty())
-         */
         Ok(true)
     }
 

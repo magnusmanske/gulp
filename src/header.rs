@@ -149,7 +149,23 @@ impl Header {
             schema: hs?,
         })
     }
-}
+
+    pub async fn create_in_db(&mut self, app: &std::sync::Arc<AppState>) -> Result<DbId,crate::GenericError> {
+        if self.id!=0 {
+            return Err("create_in_db: Already has an id".into());
+        }
+        let mut conn = app.get_gulp_conn().await?;
+
+        let list_id = self.list_id;
+        let revision_id = self.revision_id;
+        let header_schema_id = self.schema.id;
+        let sql = r#"INSERT INTO `header` (`list_id`,`revision_id`,`header_schema_id`) VALUES (:name,:revision_id,:header_schema_id)"# ;
+        conn.exec_drop(sql, params!{list_id,revision_id,header_schema_id}).await?;
+        if let Some(id) = conn.last_insert_id() {
+            self.id = id
+        }
+        Ok(self.id)
+    }}
 
 
 #[cfg(test)]

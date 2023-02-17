@@ -1,5 +1,6 @@
 use crate::app_state::AppState;
 use crate::data_source::DataSource;
+use crate::list::List;
 use crate::oauth::*;
 use crate::header::DbId;
 use mysql_async::prelude::*;
@@ -141,6 +142,33 @@ fn json_error(s: &str) -> Response {
     (StatusCode::OK ,Json(json!({"status":s}))).into_response()
 }
 
+async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
+    let user_id = match get_user_id(&state,&cookies).await {
+        Some(user_id) => user_id,
+        None => return json_error("You need to be logged in")
+    };
+    let name = match params.get("name") {
+        Some(name) => name.to_owned(),
+        None => return json_error("A name is required")
+    };
+    let header_schema_id = match params.get("header_schema_id") {
+        Some(s) => {
+            match s.parse::<DbId>() {
+                Ok(id) => id,
+                Err(e) => return json_error(&e.to_string()),
+            }
+        },
+        None => return json_error("A header_schema_id is required"),
+    };
+    let list = match List::create_new(&state, &name, header_schema_id).await {
+        Some(list) => list,
+        None => return json_error("New list could not be created"),
+    };
+    let _ = list.add_access(&state, user_id,"admin").await;
+    let j = json!({"status":"OK","data":list.id});
+    (StatusCode::OK, Json(j)).into_response()
+}
+
 async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let _user_id = match get_user_id(&state,&cookies).await {
         Some(user_id) => user_id,
@@ -245,6 +273,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/list/info/:id", get(list_info))
         .route("/list/snapshot/:id", get(list_snapshot))
         .route("/list/sources/:id", get(list_sources))
+        .route("/list/new", get(new_list))
 
         .route("/header/schemas", get(header_schemas))
         .route("/header/schema/new", get(new_header_schema))
