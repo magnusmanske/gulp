@@ -120,6 +120,19 @@ impl HeaderSchema {
         }
         Ok(self.id)
     }
+
+    pub fn get_first_wiki_page_column(&self) -> Option<usize> {
+        self.columns
+        .iter()
+        .enumerate()
+        .filter_map(|(num,col)|{
+            match col.column_type {
+                ColumnType::WikiPage => Some(num),
+                _ => None,
+            }
+        })
+        .next()
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]

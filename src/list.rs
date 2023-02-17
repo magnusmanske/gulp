@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use mysql_async::{prelude::*, Conn};
 use serde_json::json;
+use wikibase::mediawiki::api::Api;
 use crate::app_state::AppState;
 use crate::data_source::DataSource;
 use crate::data_source::DataSourceFormat;
@@ -129,11 +130,60 @@ impl List {
         Ok(row_number)
     }
 
-    pub async fn import_from_url(&self, url: &str, file_type: DataSourceFormat, user_id: DbId) -> Result<(), GenericError> {
+    fn get_client() -> Result<reqwest::Client, GenericError> {
         let client = reqwest::Client::builder()
             .user_agent("gulp/0.1")
             .build()?;
-        let text = client.get(url).send().await?.text().await?;
+        Ok(client)
+    }
+
+    pub async fn import_from_pagepile(&self, id: &str, user_id: DbId) -> Result<(), GenericError> {
+        let col_num = match self.header.schema.get_first_wiki_page_column() {
+            Some(num) => num,
+            None => return Err("import_from_pagepile: Wrong header schema, needs to have a WikiPage as first column".into()),
+        };
+        let url = format!("https://pagepile.toolforge.org/api.php?id={id}&action=get_data&doit&format=json&metadata=1");
+        let json: serde_json::Value = Self::get_client()?.get(url).send().await?.json().await?;
+        let wiki = json.get("wiki").ok_or_else(||"import_from_pagepile: No field 'wiki'")?;
+        let wiki = wiki.as_str().ok_or_else(||"import_from_pagepile: field 'wiki' not a str")?.to_string();
+        let api_url = format!("https://{}/w/api.php",AppState::get_server_for_wiki(&wiki));
+        let api = Api::new(&api_url).await?;
+
+        let pages = json.get("pages").ok_or_else(||"import_from_pagepile: No field 'pages'")?;
+        let pages = pages.as_object().ok_or_else(||"import_from_pagepile: field 'pages' not an object")?;
+        let pages: Vec<String> = pages.keys().cloned().collect();
+
+        // TODO delete rows?
+        let mut conn = self.app.get_gulp_conn().await?;
+        let mut md5s = self.load_json_md5s(&mut conn).await?;
+        let mut next_row_num = self.get_max_row_num(&mut conn).await? + 1;
+        let mut rows = vec![];
+        for page in &pages {
+            if page.is_empty() {
+                continue;
+            }
+            let title = wikibase::mediawiki::title::Title::new_from_full(&page, &api);
+            let wp = WikiPage{ title: page.to_string(), namespace_id: Some(title.namespace_id()), wiki: Some(wiki.to_owned()) };
+            let mut cells: Vec<Option<Cell>> = vec![];
+            cells.resize_with(self.header.schema.columns.len(), Default::default);
+            cells[col_num] = Some(Cell::WikiPage(wp));
+
+            if let Some(row) = self.get_or_ignore_new_row(&mut conn, &md5s, cells, next_row_num, user_id).await? {
+                next_row_num += 1;
+                md5s.insert(row.json_md5.to_owned());
+                rows.push(row);
+                if rows.len()>=ROW_INSERT_BATCH_SIZE {
+                    self.flush_row_insert(&mut conn, &mut rows).await?;
+                }
+            }
+        }
+        self.flush_row_insert(&mut conn, &mut rows).await?;
+
+        Ok(())
+    }
+
+    pub async fn import_from_url(&self, url: &str, file_type: DataSourceFormat, user_id: DbId) -> Result<(), GenericError> {
+        let text = Self::get_client()?.get(url).send().await?.text().await?;
         let _ = match file_type {
             DataSourceFormat::JSONL => self.import_jsonl(&text, user_id).await?,
             _ => return Err("import_from_url: unsopported type {file_type}".into()),
@@ -193,9 +243,10 @@ impl List {
             let revision_id = row.revision_id;
             let json = &row.json;
             let json_md5 = &row.json_md5;
-            params!{list_id,row_num,revision_id,json,json_md5}
+            let user_id = row.user_id;
+            params!{list_id,row_num,revision_id,json,json_md5,user_id}
         }).collect();
-        let sql = r#"INSERT INTO `row` (list_id,row_num,revision_id,json,json_md5) VALUES (:list_id,:row_num,:revision_id,:json,:json_md5)"#;
+        let sql = r#"INSERT INTO `row` (list_id,row_num,revision_id,json,json_md5,user_id,modified) VALUES (:list_id,:row_num,:revision_id,:json,:json_md5,:user_id,now())"#;
         let tx_opts = mysql_async::TxOpts::default()
             .with_consistent_snapshot(true)
             .with_isolation_level(mysql_async::IsolationLevel::RepeatableRead)
@@ -284,10 +335,9 @@ impl List {
 
     pub async fn update_from_source(&self, source: &DataSource, user_id: DbId) -> Result<(),GenericError> {
         match source.source_type {
-            DataSourceType::URL => {
-                self.import_from_url(&source.location,source.source_format.to_owned(), user_id).await?;
-            }
-            DataSourceType::FILE => todo!()
+            DataSourceType::URL => self.import_from_url(&source.location,source.source_format.to_owned(), user_id).await?,
+            DataSourceType::FILE => todo!(),
+            DataSourceType::PAGEPILE => self.import_from_pagepile(&source.location, user_id).await?,
         }
         Ok(())
     }

@@ -8,6 +8,7 @@ pub enum DataSourceFormat {
     TSV,
     CSV,
     JSONL,
+    PAGEPILE,
 }
 
 impl DataSourceFormat {
@@ -16,6 +17,7 @@ impl DataSourceFormat {
             "TSV" => Some(Self::TSV),
             "CSV" => Some(Self::CSV),
             "JSONL" => Some(Self::JSONL),
+            "PAGEPILE" => Some(Self::PAGEPILE),
             _ => None
         }
     }
@@ -25,6 +27,7 @@ impl DataSourceFormat {
 pub enum DataSourceType {
     URL,
     FILE,
+    PAGEPILE,
 }
 
 impl DataSourceType {
@@ -32,6 +35,7 @@ impl DataSourceType {
         match s.trim().to_uppercase().as_str() {
             "URL" => Some(Self::URL),
             "FILE" => Some(Self::FILE),
+            "PAGEPILE" => Some(Self::PAGEPILE),
             _ => None
         }
     }

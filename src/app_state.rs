@@ -4,6 +4,7 @@ use std::time::Duration;
 use mysql_async::{prelude::*,Conn,Opts,OptsBuilder,PoolConstraints,PoolOpts};
 use oauth2::{AuthUrl, ClientId, ClientSecret, TokenUrl, RedirectUrl};
 use oauth2::basic::BasicClient;
+use regex::{Regex, Captures};
 use serde_json::{Value, json};
 use tokio::sync::{Mutex, RwLock};
 use std::sync::Arc;
@@ -126,11 +127,45 @@ impl AppState {
         }
         self.lists.read().await.get(&list_id).map(|x|x.clone())
     }
+
+    pub fn get_server_for_wiki(wiki: &str) -> String {
+        lazy_static! {
+            static ref RE_REMOVE_P: Regex = Regex::new(r#"_p$"#).expect("RE_REMOVE_P does not parse");
+            static ref RE_FINAL_WIKI: Regex = Regex::new(r#"wiki$"#).expect("RE_FINAL_WIKI does not parse");
+            static ref RE_OTHER: Regex = Regex::new(r#"^(.+)(wik.+)$"#).expect("RE_FINAL_WIKI does not parse");
+        }
+        let wiki = RE_REMOVE_P.replace(wiki,"").to_string();
+        match wiki.as_str() {
+            "commonswiki" => "commons.wikimedia.org".to_string(),
+            "wikidatawiki" => "www.wikidata.org".to_string(),
+            "specieswiki" => "species.wikimedia.org".to_string(),
+            "metawiki" => "meta.wikimedia.org".to_string(),
+            wiki => {
+                let wiki  = wiki.replace("_","-");
+                let server = RE_FINAL_WIKI.replace(&wiki,".wikipedia.org").to_string();
+                if server==wiki {
+                    RE_OTHER.replace(&wiki,|caps: &Captures| format!("{}.{}.org", &caps[1], &caps[2])).to_string()
+                } else {
+                    server
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_get_server_for_wiki() {
+        assert_eq!(AppState::get_server_for_wiki("enwiki"),"en.wikipedia.org");
+        assert_eq!(AppState::get_server_for_wiki("enwiki_p"),"en.wikipedia.org");
+        assert_eq!(AppState::get_server_for_wiki("commonswiki"),"commons.wikimedia.org");
+        assert_eq!(AppState::get_server_for_wiki("wikidatawiki"),"www.wikidata.org");
+        assert_eq!(AppState::get_server_for_wiki("specieswiki"),"species.wikimedia.org");
+        assert_eq!(AppState::get_server_for_wiki("metawiki"),"meta.wikimedia.org");
+    }
 
     #[tokio::test]
     async fn test_get_lists_by_user_rights() {

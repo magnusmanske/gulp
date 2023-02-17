@@ -1,7 +1,10 @@
-use async_session::SessionStore;
+#[macro_use]
+extern crate lazy_static;
+
+// use async_session::SessionStore;
 use clap::{Parser, Subcommand};
 use app_state::AppState;
-use serde_json::json;
+// use serde_json::json;
 use std::sync::Arc;
 use api::run_server;
 
@@ -44,20 +47,19 @@ async fn main() -> Result<(), GenericError> {
             run_server(app).await?;
         }
         Some(Commands::Test) => {
-            let session = app.store.load_session("yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw=".to_string()).await;
-            println!("{session:?}");
-            let session = session.unwrap().unwrap();
-            println!("{session:?}");
-            let j = json!(session).get("data").cloned().unwrap();
-            println!("{j:?}");
-            let j = j.get("user").unwrap().as_str().unwrap();
-            println!("{j:?}");
-            let user: serde_json::Value = serde_json::from_str(j).unwrap();
-            let username = user.get("username").unwrap().as_str().unwrap();
-            println!("{username}");
-            let user_id = app.get_or_create_wiki_user_id(username).await;
-            println!("{user_id:?}");
-        
+            // let session = app.store.load_session("yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw=".to_string()).await;
+            // let session = session.unwrap().unwrap();
+            // let j = json!(session).get("data").cloned().unwrap();
+            // let j = j.get("user").unwrap().as_str().unwrap();
+            // let user: serde_json::Value = serde_json::from_str(j).unwrap();
+            // let username = user.get("username").unwrap().as_str().unwrap();
+            // let user_id = app.get_or_create_wiki_user_id(username).await.unwrap();
+
+            let user_id=1;
+            let list = AppState::get_list(&app,7).await.expect("List does not exists");
+            let list = list.lock().await;
+            list.import_from_pagepile("46089",user_id).await.unwrap();
+
             /*
             let list = AppState::get_list(&app,4).await.expect("List does not exists");
             let list = list.lock().await;
