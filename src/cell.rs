@@ -10,12 +10,12 @@ pub struct WikiPage {
 }
 
 impl WikiPage {
-    pub fn as_json(&self, column: &HeaderColumn) -> serde_json::Value {
-        if self.wiki==column.wiki && self.namespace_id==column.namespace_id {
-            json!(self.title) // Short version, string only
-        } else {
+    pub fn as_json(&self, _column: &HeaderColumn) -> serde_json::Value {
+        // if self.wiki==column.wiki && self.namespace_id==column.namespace_id {
+        //     json!(self.title) // Short version, string only
+        // } else {
             json!(self) // Long version
-        }
+        // }
     }
 
     pub fn as_string(&self, column: &HeaderColumn) -> String {
