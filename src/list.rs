@@ -45,7 +45,7 @@ impl List {
 
     pub async fn add_access(&self, app: &Arc<AppState>, user_id: DbId, access: &str) -> Result<(),GenericError> {
         let list_id = self.id;
-        let sql = "INSERT IGNORE INTO `access` (list_id,user_id,right) VALUES (:list_id,:user_id,:access)";
+        let sql = "INSERT IGNORE INTO `access` (list_id,user_id,`right`) VALUES (:list_id,:user_id,:access)";
         app.get_gulp_conn().await?.exec_drop(sql, params!{list_id,user_id,access}).await?;
         Ok(())
     }
