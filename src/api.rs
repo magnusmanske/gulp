@@ -39,7 +39,7 @@ async fn get_user_id(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers:
 
 async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let mut j = json!({"user":get_user(&state,&cookies).await});
-    if !j.is_null() {
+    if !jget("user").is_null() {
         j["user"]["id"] = json!(get_user_id(&state,&cookies).await);
     }
     (StatusCode::OK, Json(j)).into_response()
