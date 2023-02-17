@@ -10,12 +10,12 @@ pub struct WikiPage {
 }
 
 impl WikiPage {
-    pub fn as_json(&self, _column: &HeaderColumn) -> serde_json::Value {
-        // if self.wiki==column.wiki && self.namespace_id==column.namespace_id {
-        //     json!(self.title) // Short version, string only
-        // } else {
+    pub fn as_json(&self, column: &HeaderColumn) -> serde_json::Value {
+        if self.wiki==column.wiki && self.namespace_id==column.namespace_id {
+            json!(self.title) // Short version, string only
+        } else {
             json!(self) // Long version
-        // }
+        }
     }
 
     pub fn as_string(&self, column: &HeaderColumn) -> String {
@@ -98,9 +98,9 @@ mod tests {
 
     #[test]
     fn test_new_wiki_page() {
-        let header = HeaderColumn{ column_type: ColumnType::WikiPage, wiki: None, string: None, namespace_id: None };
+        let column = HeaderColumn{ column_type: ColumnType::WikiPage, wiki: None, string: None, namespace_id: None };
         let j = json!({"title":"Abc","namespace_id":7,"wiki":"frwiki"});
-        let c = Cell::new_wiki_page(&j, &header).unwrap();
+        let c = Cell::new_wiki_page(&j, &column).unwrap();
         let wp = match c {
             Cell::WikiPage(wp) => wp,
             _ => panic!("Not a WikiPage")
@@ -108,6 +108,7 @@ mod tests {
         assert_eq!(wp.title,"Abc");
         assert_eq!(wp.namespace_id,Some(7));
         assert_eq!(wp.wiki,Some("frwiki".to_string()));
+        assert_eq!(wp.as_json(&column),j); // Round trip
     }
 
 }
