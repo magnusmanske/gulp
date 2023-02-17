@@ -159,7 +159,8 @@ impl Header {
         let list_id = self.list_id;
         let revision_id = self.revision_id;
         let header_schema_id = self.schema.id;
-        let sql = r#"INSERT INTO `header` (`list_id`,`revision_id`,`header_schema_id`) VALUES (:name,:revision_id,:header_schema_id)"# ;
+        let sql = r#"INSERT INTO `header` (`list_id`,`revision_id`,`header_schema_id`) VALUES (:list_id,:revision_id,:header_schema_id)"# ;
+        //println!("{sql}\n{list_id}/{revision_id}/{header_schema_id}");
         conn.exec_drop(sql, params!{list_id,revision_id,header_schema_id}).await?;
         if let Some(id) = conn.last_insert_id() {
             self.id = id

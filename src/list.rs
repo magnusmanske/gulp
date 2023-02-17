@@ -35,6 +35,7 @@ impl List {
         let sql = "INSERT INTO `list` (`name`) VALUES (:name)" ;
         conn.exec_drop(sql, params!{name}).await.ok()?;
         let list_id = conn.last_insert_id()?;
+        drop(conn);
         
         let mut header = Header { id: 0, list_id, revision_id: 0, schema: header_schema };
         let _ = header.create_in_db(app).await.ok()?;
