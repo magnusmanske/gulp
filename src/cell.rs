@@ -51,13 +51,27 @@ impl Cell {
                 wiki: column.wiki.to_owned(),
             }
         } else if let Some(o) = value.as_object() {
+            let wiki = match o.get("wiki") {
+                Some(wiki) => match wiki.as_str() {
+                    Some(wiki) => Some(wiki.to_string()),
+                    None => column.wiki.to_owned(),
+                },
+                None => column.wiki.to_owned(),
+            };
+            let namespace_id = match o.get("namespace_id") {
+                Some(id) => match id.as_i64() {
+                    Some(id) => Some(id),
+                    None => column.namespace_id.to_owned(),
+                },
+                None => column.namespace_id.to_owned(),
+            };
             WikiPage {
                 title: o.get("title")?.as_str()?.to_string(),
-                namespace_id: column.namespace_id.to_owned(),
-                wiki: column.wiki.to_owned(),
+                namespace_id,
+                wiki,
             }
         } else {
-            dbg!(format!("new_wiki_page: {value:?}"));
+            //dbg!(format!("new_wiki_page: {value:?}"));
             return None;
         };
         Some(Self::WikiPage(page))
@@ -76,4 +90,24 @@ impl Cell {
             Cell::WikiPage(wp) => wp.as_string(column),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_wiki_page() {
+        let header = HeaderColumn{ column_type: ColumnType::WikiPage, wiki: None, string: None, namespace_id: None };
+        let j = json!({"title":"Abc","namespace_id":7,"wiki":"frwiki"});
+        let c = Cell::new_wiki_page(&j, &header).unwrap();
+        let wp = match c {
+            Cell::WikiPage(wp) => wp,
+            _ => panic!("Not a WikiPage")
+        };
+        assert_eq!(wp.title,"Abc");
+        assert_eq!(wp.namespace_id,Some(7));
+        assert_eq!(wp.wiki,Some("frwiki".to_string()));
+    }
+
 }
