@@ -308,5 +308,7 @@ mod tests {
         let list = List::from_id(&app, 4).await.unwrap();
         assert_eq!(list.id,4);
         assert_eq!(list.name,"File candidates Hessen");
+        println!("{:?}",list.header.schema.columns[0]);
+        //assert_eq!(list.header.schema.columns[0],"File candidates Hessen");
     }
 }

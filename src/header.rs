@@ -38,14 +38,18 @@ impl HeaderColumn {
         let ct = value.get("column_type")?.as_str()?;
         Some(Self{
             column_type: ColumnType::from_str(ct)?,
-            wiki: value.get("wiki").map(|s|s.to_string()),
+            wiki: Self::value_option_to_string_option(value.get("wiki")),
             namespace_id: Self::value_option_to_namespace_id(value.get("namespace_id")),
-            string: value.get("string").map(|s|s.to_string()),
+            string: Self::value_option_to_string_option(value.get("string")),
         })
     }
 
     fn value_option_to_namespace_id(vo: Option<&serde_json::Value>) -> Option<NamespaceType> {
         vo?.as_i64()
+    }
+
+    fn value_option_to_string_option(vo: Option<&serde_json::Value>) -> Option<String> {
+        Some(vo.to_owned()?.as_str()?.to_string())
     }
 }
 
