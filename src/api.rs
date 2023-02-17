@@ -28,9 +28,11 @@ use crate::GenericError;
 async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<serde_json::Value> {
     let cookie = cookies.to_owned()?.get(COOKIE_NAME)?.to_string();
     let session = state.store.load_session(cookie).await.ok()??;
-    let j = json!(session).get("data").cloned()?;
-    let mut j = j.get("user")?.to_owned();
-    j["id"] = json!(state.get_or_create_wiki_user_id(j.get("username")?.as_str()?).await?);
+    let mut j = json!(session).get("data").cloned()?.get("user")?.to_owned();
+    let j2: serde_json::Value = serde_json::from_str(j.as_str()?).ok()?;
+    let user_name = j2.get("username")?.as_str()?;
+    let user_id = state.get_or_create_wiki_user_id(user_name).await?;
+    j["id"] = user_id.into();
     serde_json::from_str(j.as_str()?).ok()
 }
 

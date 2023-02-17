@@ -4,7 +4,7 @@ extern crate lazy_static;
 // use async_session::SessionStore;
 use clap::{Parser, Subcommand};
 use app_state::AppState;
-// use serde_json::json;
+use serde_json::json;
 use std::sync::Arc;
 use api::run_server;
 
@@ -55,11 +55,17 @@ async fn main() -> Result<(), GenericError> {
             // let username = user.get("username").unwrap().as_str().unwrap();
             // let user_id = app.get_or_create_wiki_user_id(username).await.unwrap();
 
-            let user_id=1;
-            let list = AppState::get_list(&app,7).await.expect("List does not exists");
-            let list = list.lock().await;
-            list.import_from_pagepile("46089",user_id).await.unwrap();
-
+            //let cookie = "yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw=".to_string();
+            //let session = app.load_session(cookie).await.ok();
+            let j = r#"{"data":{"user":"{\"username\":\"Magnus Manske\",\"realname\":\"\",\"email\":\"magnusmanske@googlemail.com\",\"editcount\":1299,\"confirmed_email\":true,\"blocked\":false,\"groups\":[\"oauthadmin\",\"*\",\"user\",\"autoconfirmed\"],\"rights\":[],\"grants\":[\"mwoauth-authonlyprivate\"]}"},"expiry":null,"id":"yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw="}"#;
+            let j: serde_json::Value = serde_json::from_str(&j).unwrap();
+            let j = json!(j).get("data").cloned().unwrap().get("user").unwrap().to_owned();
+            let j: serde_json::Value = serde_json::from_str(j.as_str().unwrap()).unwrap();
+            println!("{j:?}");
+            let user_name = j.get("username").unwrap().as_str().unwrap();
+            let user_id = app.get_or_create_wiki_user_id(user_name).await.unwrap();
+            println!("{user_id}");
+        
             /*
             let list = AppState::get_list(&app,4).await.expect("List does not exists");
             let list = list.lock().await;
