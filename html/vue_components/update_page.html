@@ -34,7 +34,7 @@
 						</td>
 						<td>
 							<div v-if="(source.status??'')==''">
-								<button v-if="source.source_type=='URL'" class="btn btn-outline-success" tt_title="update_from_existing_source" @click.prevent="update_from_existing_source(source)">
+								<button v-if="" class="btn btn-outline-success" tt_title="update_from_existing_source" @click.prevent="update_from_existing_source(source)">
 									<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Icon_-_Update.svg/24px-Icon_-_Update.svg.png" />
 								</button>
 							</div>
@@ -45,7 +45,8 @@
 					</tr>
 				</table>
 			</div>
-			<div v-else tt="no_existing_sources">
+			<div v-else>
+				<i tt="no_existing_sources"></i>
 			</div>
 	
 			<div>
@@ -59,21 +60,31 @@
 					<input type="radio" v-model="source_type" value="FILE" />
 					<span tt="file"></span>
 				</label>
+				<label>
+					<input type="radio" v-model="source_type" value="PAGEPILE" />
+					<span tt="pagepile"></span>
+				</label>
 	
 				<span tt="source_format" style="font-weight: bold; margin-left:3rem;"></span>
-				<label>
-					<input type="radio" v-model="source_format" value="CSV" />
-					<span tt="csv"></span>
-				</label>
-				<label>
-					<input type="radio" v-model="source_format" value="TSV" />
-					<span tt="tsv"></span>
-				</label>
-				<label>
-					<input type="radio" v-model="source_format" value="JSONL" />
-					<span tt="jsonl"></span>
-					<a href="https://jsonlines.org/" target="_blank">ⓘ</a>
-				</label>
+				<span v-if="source_type=='PAGEPILE'">
+					<span tt="pagepile"></span>
+					<a href="https://pagepile.toolforge.org/" target="_blank">ⓘ</a>
+				</span>
+				<span v-else>
+					<label>
+						<input type="radio" v-model="source_format" value="CSV" />
+						<span tt="csv"></span>
+					</label>
+					<label>
+						<input type="radio" v-model="source_format" value="TSV" />
+						<span tt="tsv"></span>
+					</label>
+					<label>
+						<input type="radio" v-model="source_format" value="JSONL" />
+						<span tt="jsonl"></span>
+						<a href="https://jsonlines.org/" target="_blank">ⓘ</a>
+					</label>
+				</span>
 			</div>
 	
 			<div v-if="source_type=='URL'">
@@ -81,6 +92,12 @@
 			</div>
 			<div v-else-if="source_type=='FILE'">
 				FILE TODO
+			</div>
+			<div v-else-if="source_type=='PAGEPILE'">
+				<input type="text" v-model="source_url" style="width:10rem;" tt_placeholder="pagepile_id" />
+			</div>
+			<div style="margin-top: 1rem;">
+				<button class="btn btn-outline-primary" tt="create_new_source" @click.prevent="create_new_source" :disabled="!is_valid()"></button>
 			</div>
 		</div>
 	</div>
@@ -131,6 +148,31 @@ let UpdatePage = Vue.extend ( {
 					if ( d.status=='OK' ) source.status = '';
 					else source.status = d.status ;
 				})
+		},
+		is_valid() {
+			if ( this.source_type=="PAGEPILE" ) {
+				return !isNaN(this.source_url) && this.source_url!='';
+			}
+			return this.source_url!='';
+		},
+		create_new_source() {
+			if ( !this.is_valid() ) return ;
+			if ( typeof this.list_id!='undefined' ) {
+				let source_format = this.source_format;
+				if ( this.source_type=="PAGEPILE" ) source_format = this.source_type;
+				let url = "/source/create/"+this.list_id+"?type="+encodeURIComponent(this.source_type)+"&format="+encodeURIComponent(source_format)+"&location="+encodeURIComponent(this.source_url);
+	            fetch(url)
+	                .then((response) => response.json())
+	                .then((d) => {
+	                	if (d.status=="OK") {
+	                		window.location.reload();
+	                	} else {
+	                		alert(d.status);
+	                	}
+	                })
+			} else {
+				alert("Not implemented");				
+			}
 		},
 	} ,
 	template:"#update-page-template"

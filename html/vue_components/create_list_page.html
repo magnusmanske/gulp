@@ -73,7 +73,7 @@ let CreateListPage = Vue.extend ( {
                 .then((d) => {
                 	if (d.status=="OK") {
                 		let list_id = d.data;
-                		this.$router.push ("/list/"+list_id);
+                		this.$router.push ("/update/"+list_id);
                 	} else {
                 		alert(d.status);
                 	}
