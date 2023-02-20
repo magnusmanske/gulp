@@ -1,5 +1,5 @@
 use crate::app_state::AppState;
-use crate::data_source::DataSource;
+use crate::data_source::{DataSource, DataSourceFormat, DataSourceType};
 use crate::list::List;
 use crate::oauth::*;
 use crate::header::DbId;
@@ -108,6 +108,50 @@ async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error updating from source: {}",e.to_string())}))).into_response(),
     }
     let j = json!({"status":"OK"});
+    (StatusCode::OK, Json(j)).into_response()
+}
+
+async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<DbId>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
+    let user_id = match get_user_id(&state,&cookies).await {
+        Some(user_id) => user_id,
+        None => return (StatusCode::OK, Json(json!({"status":"Could not get a user ID"}))).into_response()
+    };
+    let ds_type = match params.get("type").map(|s|DataSourceType::new(s)) {
+        Some(ds_format) => match ds_format {
+            Some(ds_format) => ds_format,
+            None => return (StatusCode::GONE ,Json(json!({"status":format!("Invalid type")}))).into_response(),
+        },
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Missing type")}))).into_response(),
+    };
+    let ds_format = match params.get("format").map(|s|DataSourceFormat::new(s)) {
+        Some(ds_format) => match ds_format {
+            Some(ds_format) => ds_format,
+            None => return (StatusCode::GONE ,Json(json!({"status":format!("Invalid format")}))).into_response(),
+        },
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Missing format")}))).into_response(),
+    };
+    let location = match params.get("location") {
+        Some(location) => location.to_owned(),
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Missing location")}))).into_response(),
+    };
+    let _list = match AppState::get_list(&state,list_id).await {
+        Some(list) => list,
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{list_id} perhaps?")}))).into_response(),
+    };
+
+    let mut ds = DataSource {
+        id: 0,
+        list_id,
+        source_type: ds_type,
+        source_format: ds_format,
+        location,
+        user_id,
+    };
+    match ds.create(&state).await {
+        Some(_) => {},
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Could not create data source")}))).into_response(),
+    }
+    let j = json!({"status":"OK","data":ds});
     (StatusCode::OK, Json(j)).into_response()
 }
 
@@ -282,6 +326,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         
 
         .route("/source/update/:source_id", get(source_update))
+        .route("/source/create/:list_id", get(source_create))
 
         .route("/upload", post(upload))
 
