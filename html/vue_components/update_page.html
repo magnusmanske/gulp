@@ -24,8 +24,11 @@
 						<td>{{source.source_type}}</td>
 						<td>{{source.source_format}}</td>
 						<td>
-							<span v-id="source.source_type=='URL'">
+							<span v-if="source.source_type=='URL'">
 								<a :href="source.location" target="_blank" class="external">{{source.location}}</a>
+							</span>
+							<span v-else-if="source.source_type=='PAGEPILE'">
+								# <a :href="'https://pagepile.toolforge.org/api.php?id='+source.location+'&action=get_data&format=html&doit1'" target="_blank" class="external">{{source.location}}</a>
 							</span>
 							<span v-else>{{source.location}}</span>
 						</td>
@@ -34,7 +37,7 @@
 						</td>
 						<td>
 							<div v-if="(source.status??'')==''">
-								<button v-if="" class="btn btn-outline-success" tt_title="update_from_existing_source" @click.prevent="update_from_existing_source(source)">
+								<button v-if="source.source_type=='URL'" class="btn btn-outline-success" tt_title="update_from_existing_source" @click.prevent="update_from_existing_source(source)">
 									<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Icon_-_Update.svg/24px-Icon_-_Update.svg.png" />
 								</button>
 							</div>
@@ -116,7 +119,7 @@ let UpdatePage = Vue.extend ( {
 	} } ,
 	created : function () {
 		if ( !isNaN(this.list_or_new) ) this.list_id = this.list_or_new*1;
-		this.list_or_new_is_valid = this.list_or_new=="new" || !isNaN(this.list_or_new)  ;
+		this.list_or_new_is_valid = !isNaN(this.list_or_new) ; // this.list_or_new=="new" || 
 		// TODO check if user has write access
 		this.load_existing_sources() ;
 	},
@@ -133,13 +136,13 @@ let UpdatePage = Vue.extend ( {
 						this.users = d.users;
 						this.existing_sources = d.sources;
 					} else {
-						// TODO error
+						alert(d.status);
 						console.log(d);
 					}
 					this.loading = false;
 				});
 		} ,
-		update_from_existing_source(source) {
+		update_from_existing_source(source,callback) {
 			source.status = 'running';
 			let url = "/source/update/"+source.id;
 			fetch(url)
@@ -147,6 +150,7 @@ let UpdatePage = Vue.extend ( {
 				.then((d) => {
 					if ( d.status=='OK' ) source.status = '';
 					else source.status = d.status ;
+					if ( typeof callback!='undefined' ) callback();
 				})
 		},
 		is_valid() {
@@ -165,7 +169,11 @@ let UpdatePage = Vue.extend ( {
 	                .then((response) => response.json())
 	                .then((d) => {
 	                	if (d.status=="OK") {
-	                		window.location.reload();
+	                		let source = d.data;
+	                		this.existing_sources.push(source);
+	                		this.update_from_existing_source(source,function(){
+	                			window.location.reload();
+	                		});
 	                	} else {
 	                		alert(d.status);
 	                	}
