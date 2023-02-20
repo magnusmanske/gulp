@@ -14,10 +14,30 @@ var ns_cache = {
             if ( typeof self.cache[wiki]=='undefined') to_load.push(wiki);
         });
         if ( to_load.length==0 ) return callback();
-        console.log(to_load);
-        callback();// TODO
+        let promises = [];
+        to_load.forEach(function(wiki){
+            let server = self.get_server_for_wiki(wiki);
+            if ( typeof server=="undefined" ) return;
+            let url = "https://"+server+"/w/api.php?action=query&meta=siteinfo&siprop=namespaces&format=json&callback=?";
+            let promise = new Promise(function(resolve, reject) {
+                function delay() {
+                    if ( self.loading[wiki] ) return setTimeout(delay,50);
+                    resolve();
+                }
+                if ( self.loading[wiki] ) return delay();
+                self.loading[wiki] = true;
+                $.getJSON(url,function(d){
+                    self.cache[wiki]=d.query.namespaces;
+                    self.loading[wiki] = false;
+                    resolve();
+                })
+            });
+            promises.push(promise);
+        });
+        Promise.all(promises).then(callback);
     } ,
     get_server_for_wiki(wiki) {
+        if ( typeof wiki=='undefined' ) return ;
         if ( wiki=="wikidatawiki" ) return "www.wikidata.org";
         if ( wiki=="commonswiki" ) return "commons.wikimedia.org";
         if ( wiki=="specieswiki" ) return "species.wikimedia.org";
@@ -25,6 +45,10 @@ var ns_cache = {
         let server = wiki.replace(/wiki$/,".wikipedia.org");
         if (wiki!=server) return server;
         return wiki.replace(/^(.+)(wik.+)$/,"$1.$2.org");
+    },
+    prefix_with_namespace(wiki,namespace_id,title) {
+        if ( namespace_id==0 ) return title;
+        return self.cache[wiki].query.namespaces[namespace_id].canonical+":"+title;
     }
 
 };
