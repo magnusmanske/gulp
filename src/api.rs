@@ -347,7 +347,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
     let ip = [0, 0, 0, 0];
 
     let addr = SocketAddr::from((ip, port));
-    tracing::info!("listening on {}", addr);
+    tracing::info!("listening on http://{}", addr);
     Server::bind(&addr)
         .serve(app.into_make_service())
         .await?;
