@@ -25,6 +25,8 @@ use axum::{
 };
 use crate::GenericError;
 
+const MAX_UPLOAD_MB: usize = 50;
+
 async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<serde_json::Value> {
     let cookie = cookies.to_owned()?.get(COOKIE_NAME)?.to_string();
     let session = state.store.load_session(cookie).await.ok()??;
@@ -331,18 +333,20 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
         .route("/upload", post(upload))
 
         .merge(SpaRouter::new("/", "html").index_file("index.html"))
-        .with_state(shared_state)
-        .layer(DefaultBodyLimit::max(1024*1024*8)) // 8MB
+        .with_state(shared_state.clone())
+        .layer(DefaultBodyLimit::max(1024*1024*MAX_UPLOAD_MB))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(cors);
     
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
-    tracing::debug!("listening on {}", addr);
+    let port: u16 = shared_state.webserver_port;
+    let ip = [0, 0, 0, 0];
+
+    let addr = SocketAddr::from((ip, port));
+    tracing::info!("listening on {}", addr);
     Server::bind(&addr)
         .serve(app.into_make_service())
-        .await
-        .expect("Server error");
+        .await?;
 
     Ok(())
 }

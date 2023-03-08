@@ -23,6 +23,7 @@ pub struct AppState {
     pub secret_token: String,
     pub store: DatabaseSessionStore,
     pub oauth_client: BasicClient,
+    pub webserver_port: u16,
 }
 
 impl AppState {
@@ -61,6 +62,7 @@ impl AppState {
             secret_token: config["secret_token"].as_str().unwrap().to_string(),
             store: DatabaseSessionStore{pool: Some(gulp_pool.clone())}, //MemoryStore::new(),//
             oauth_client,
+            webserver_port: config["webserver"]["port"].as_u64().unwrap_or(8000) as u16,
         };
         ret
     }
