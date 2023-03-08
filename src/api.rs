@@ -3,7 +3,6 @@ use crate::data_source::{DataSource, DataSourceFormat, DataSourceType};
 use crate::list::List;
 use crate::oauth::*;
 use crate::header::DbId;
-use mysql_async::prelude::*;
 use csv::WriterBuilder;use serde_json::json;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -56,11 +55,11 @@ async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
     let revision_id: DbId = params.get("revision_id").map(|s|s.parse::<DbId>().unwrap_or(list.revision_id)).unwrap_or(list.revision_id);
     let numer_of_rows = match list.get_rows_in_revision(revision_id).await {
         Ok(numer_of_rows) => numer_of_rows,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
+        Err(e) => return json_error(&e.to_string()),
     };
     let users_in_revision = match list.get_users_in_revision(revision_id).await {
         Ok(users_in_revision) => users_in_revision,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
+        Err(e) => return json_error(&e.to_string()),
     };
     let j = json!({
         "status":"OK",
@@ -176,12 +175,10 @@ async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>)
 }
 
 async fn header_schemas(State(state): State<Arc<AppState>>,) -> Response {
-    let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE id>:dummy"#;
-    let dummy = 0;
-    let hs: Vec<crate::header::HeaderSchema> = state.get_gulp_conn().await.unwrap()
-        .exec_iter(sql,params! {dummy}).await.unwrap()
-        .map_and_drop(|row| crate::header::HeaderSchema::from_row(&row)).await.unwrap()
-        .iter().filter_map(|s|s.to_owned()).collect();
+    let hs = match state.get_all_header_schemas().await {
+        Ok(hs) => hs,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":e.to_string()}))).into_response(),
+    };
     let j = json!({"status":"OK","data":hs});
     (StatusCode::OK, Json(j)).into_response()
 }
@@ -245,6 +242,16 @@ async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Qu
     }
 }
 
+fn rows_as_csv(list: &List, rows: &Vec<crate::row::Row>) -> Result<String,GenericError> {
+    // TODO header
+    let mut wtr = WriterBuilder::new().from_writer(vec![]);
+    for row in rows {
+        wtr.write_record(&row.as_vec(&list.header))?;
+    }
+    let inner = wtr.into_inner()?;
+    Ok(String::from_utf8(inner)?)
+}
+
 async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
     let format: String = params.get("format").unwrap_or(&"json".into()).into();
     let start: u64 = params.get("start").map(|s|s.parse::<u64>().unwrap_or(0)).unwrap_or(0);
@@ -257,18 +264,15 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
     let revision_id: DbId = params.get("revision_id").map(|s|s.parse::<DbId>().unwrap_or(list.revision_id)).unwrap_or(list.revision_id);
     let rows = match list.get_rows_for_revision_paginated(revision_id, start, len).await {
         Ok(rows) => rows,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status":e.to_string()}))).into_response(),
+        Err(e) => return json_error(&e.to_string()),
     };
     
     match format.as_str() {
         "csv" => {
-            // TODO header
-            let mut wtr = WriterBuilder::new().from_writer(vec![]);
-            for row in &rows {
-                wtr.write_record(&row.as_vec(&list.header)).unwrap();
-            }
-            let inner = wtr.into_inner().unwrap();
-            let s = String::from_utf8(inner).unwrap();
+            let s = match rows_as_csv(&list,&rows) {
+                Ok(s) => s,
+                Err(e) => return json_error(&e.to_string()),
+            };
             (StatusCode::OK, s).into_response()
         }
         "tsv" => {

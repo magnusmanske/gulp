@@ -100,7 +100,7 @@ mod tests {
     fn test_new_wiki_page() {
         let column = HeaderColumn{ column_type: ColumnType::WikiPage, wiki: None, string: None, namespace_id: None };
         let j = json!({"title":"Abc","namespace_id":7,"wiki":"frwiki"});
-        let c = Cell::new_wiki_page(&j, &column).unwrap();
+        let c = Cell::new_wiki_page(&j, &column).expect("new_wiki_page failed");
         let wp = match c {
             Cell::WikiPage(wp) => wp,
             _ => panic!("Not a WikiPage")

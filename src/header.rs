@@ -107,7 +107,10 @@ impl HeaderSchema {
         let json = json!({"columns":self.columns}).to_string();
         let sql = "SELECT id,name,json FROM `header_schema` WHERE `json`=:json" ;
         if let Some(hs) = conn.exec_iter(sql,params! {json}).await?.map_and_drop(|row| Self::from_row(&row)).await?.get(0) {
-            let hs = hs.to_owned().unwrap();
+            let hs = match hs.to_owned() {
+                Some(hs) => hs,
+                None => return Err(format!("create_in_db: result error"))?,
+            };
             return Err(format!("create_in_db: A header schema with this JSON already exist: #{}: {}",hs.id,hs.name).into());
         }
 
@@ -189,7 +192,7 @@ mod tests {
     #[test]
     fn test_from_name_json() {
         let json_string = r#"{"columns":[{"column_type":"WikiPage"}]}"#;
-        let hs = HeaderSchema::from_name_json("Test",&json_string).unwrap();
+        let hs = HeaderSchema::from_name_json("Test",&json_string).expect("from_name_json error");
         assert_eq!(hs.name,"Test");
         assert_eq!(hs.columns.len(),1);
         assert_eq!(hs.columns[0].column_type,ColumnType::WikiPage);

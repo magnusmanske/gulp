@@ -153,6 +153,14 @@ impl AppState {
             }
         }
     }
+
+    pub async fn get_all_header_schemas(&self) -> Result<Vec<crate::header::HeaderSchema>,GenericError> {
+        let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE id>"#;
+        Ok(self.get_gulp_conn().await.unwrap()
+            .exec_iter(sql,()).await.unwrap()
+            .map_and_drop(|row| crate::header::HeaderSchema::from_row(&row)).await.unwrap()
+            .iter().filter_map(|s|s.to_owned()).collect())
+    }
 }
 
 #[cfg(test)]

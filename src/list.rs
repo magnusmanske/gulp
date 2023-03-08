@@ -110,10 +110,9 @@ impl List {
         }
         let user_ids: Vec<String> = user_ids.iter().map(|id|format!("{id}")).collect();
         let user_ids = user_ids.join(",");
-        let sql = format!("SELECT DISTINCT user.id,user.name FROM `user` WHERE id IN ({user_ids}) AND id>:dummy");
-        let dummy = 0;
+        let sql = format!("SELECT DISTINCT user.id,user.name FROM `user` WHERE id IN ({user_ids})");
         let ret = self.app.get_gulp_conn().await?
-            .exec_iter(sql,params! {dummy}).await?
+            .exec_iter(sql,()).await?
             .map_and_drop(|row| mysql_async::from_row::<(DbId,String)>(row)).await?
             .into_iter().collect();
         Ok(ret)
@@ -276,9 +275,14 @@ impl List {
         let sql = "SELECT count(id) FROM `row` WHERE list_id=:list_id AND revision_id=:revision_id" ;
         let list_id = self.id;
         let revision_id = self.revision_id;
-        let numer_of_rows_with_current_revision = *conn
+        let results = conn
             .exec_iter(sql,params! {list_id,revision_id}).await?
-            .map_and_drop(|row| mysql_async::from_row::<DbId>(row)).await?.get(0).unwrap();
+            .map_and_drop(|row| mysql_async::from_row::<DbId>(row)).await?;
+        let numer_of_rows_with_current_revision = results.get(0);
+        let numer_of_rows_with_current_revision = match numer_of_rows_with_current_revision {
+            Some(x) => *x,
+            None => return Err("snapshot: database query error".into()),
+        };
         if numer_of_rows_with_current_revision==0 { // No need to make a new snapshot
             return Ok(self.revision_id);
         }
@@ -366,7 +370,7 @@ mod tests {
     async fn test_from_id() {
         let app = AppState::from_config_file("config.json").expect("app creation failed");
         let app = Arc::new(app);
-        let list = List::from_id(&app, 4).await.unwrap();
+        let list = List::from_id(&app, 4).await.expect("from_id fail");
         assert_eq!(list.id,4);
         assert_eq!(list.name,"File candidates Hessen");
         println!("{:?}",list.header.schema.columns[0]);

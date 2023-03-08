@@ -139,9 +139,9 @@ mod tests {
     #[tokio::test]
     async fn test_from_db() {
         let app = AppState::from_config_file("config.json").expect("app creation failed");
-        let mut conn = app.get_gulp_conn().await.unwrap();
-        let header = Header::from_list_id(&mut conn,4).await.unwrap();
-        let row = Row::from_db(&mut conn,4,1,1,&header).await.unwrap();
+        let mut conn = app.get_gulp_conn().await.expect("get_gulp_conn");
+        let header = Header::from_list_id(&mut conn,4).await.expect("from_list_id");
+        let row = Row::from_db(&mut conn,4,1,1,&header).await.expect("from_db");
         assert_eq!(row.id,1);
         assert_eq!(row.json,"[\"Q111028176\",\"Buergerwehrbrunnen Bensheim.jpg\"]");
         assert_eq!(row.cells.len(),2);
