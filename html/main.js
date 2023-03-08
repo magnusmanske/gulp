@@ -47,9 +47,7 @@ var ns_cache = {
         return wiki.replace(/^(.+)(wik.+)$/,"$1.$2.org");
     },
     prefix_with_namespace(wiki,namespace_id,title) {
-        let self = this ;
-        if ( namespace_id==0 ) return title;
-        return self.cache[wiki][namespace_id].canonical+":"+title;
+        return this.cache[wiki][namespace_id].canonical+":"+title;
     }
 
 };
