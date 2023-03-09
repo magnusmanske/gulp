@@ -152,10 +152,6 @@ impl List {
             Some(hc) => hc,
             None => return Err("update_from_pagepile: no header given from pagepile".into()),
         };
-        let hc = match hc {
-            Some(hc) => hc,
-            None => return Err("update_from_pagepile: no wiki in header column".into()),
-        };
         let wiki = match &hc.wiki {
             Some(wiki) => wiki,
             None => return Err("update_from_pagepile: no wiki in header column".into()),

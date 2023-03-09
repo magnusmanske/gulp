@@ -1,10 +1,10 @@
+use crate::{GulpError, header::*, app_state::AppState};
 use std::sync::Arc;
-use mysql_async::prelude::*;
-use serde::{Deserialize, Serialize};
-use crate::GulpError;
-use crate::{header::*, app_state::AppState};
 use std::fs::File;
 use std::io::{ self, BufRead};
+use mysql_async::prelude::*;
+use serde::{Deserialize, Serialize};
+use crate::cell::*;
 
 pub trait DataSourceLineHandler {
     fn get_lines(&self, ds: &DataSource, limit: usize) -> Result<LineSet,GulpError> ;
@@ -53,28 +53,66 @@ impl DataSourceLineHandler for DataSourceTypePagePile {
         let lines = json.get("pages").ok_or_else(||"import_from_pagepile: No field 'pages'")?
             .as_object().ok_or_else(||"import_from_pagepile: field 'pages' not an object")?
             .keys().take(limit).cloned().collect();
-        Ok(LineSet{ lines, headers: vec![Some(header)] })
+        Ok(LineSet{ lines, headers: vec![header] })
     }
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct LineSet {
-    pub headers: Vec<Option<crate::header::HeaderColumn>>,
+    pub headers: Vec<HeaderColumn>,
     pub lines: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct CellStringSet {
-    pub headers: Vec<Option<crate::header::HeaderColumn>>,
-    pub rows: Vec<Vec<String>>,
+pub struct CellSet {
+    pub headers: Vec<HeaderColumn>,
+    pub rows: Vec<Vec<Option<Cell>>>,
+}
+
+pub trait DataSourceLineConverter {
+    fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> ;
 }
 
 
-// #[derive(Clone, Debug, Serialize)]
-// pub struct CellRowSet {
-//     pub headers: Vec<Option<crate::header::HeaderColumn>>,
-//     pub rows: Vec<Vec<crate::cell::Cell>>,
-// }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSourceFormatJSONL {}
+
+impl DataSourceLineConverter for DataSourceFormatJSONL {
+    fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> {
+        let mut rows: Vec<_> = vec!();
+        for line in &line_set.lines {
+            let json: serde_json::Value = serde_json::from_str(line)?;
+            let array = json.as_array().ok_or_else(||"import_jsonl: valid JSON but not an array: {row}")?;
+            let cells: Vec<Option<Cell>> = array
+                .iter()
+                .zip(line_set.headers.iter())
+                .map(|(value,column)|{
+                    Cell::from_value(value, column)
+                })
+                .collect();
+            rows.push(cells);
+        }
+        Ok(CellSet{headers:line_set.headers.to_owned(),rows})
+    }
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSourceFormatPagePile {}
+
+impl DataSourceLineConverter for DataSourceFormatPagePile {
+    fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> {
+        let header = line_set.headers.get(0).ok_or_else(||"PagePile line_set has no headers")?;
+        let rows: Vec<Vec<Option<Cell>>> = line_set.lines
+            .iter()
+            .map(|line|serde_json::json!(line.to_owned()))
+            .map(|value|vec![Cell::from_value(&value, header)])
+            .collect();
+        Ok(CellSet{headers:line_set.headers.to_owned(),rows})
+    }
+}
+
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum DataSourceFormat {
@@ -102,6 +140,15 @@ impl DataSourceFormat {
             Self::JSONL => "JSONL",
             Self::PAGEPILE => "PAGEPILE",
         }.to_string()
+    }
+
+    pub fn line_converter(&self) -> Arc<Box<dyn DataSourceLineConverter>> {
+        Arc::new(match self {
+            Self::CSV => todo!(),
+            Self::TSV => todo!(),
+            Self::JSONL => Box::new(DataSourceFormatJSONL {}),
+            Self::PAGEPILE => Box::new(DataSourceFormatPagePile {}),
+        })
     }
 }
 
@@ -183,31 +230,11 @@ impl DataSource {
         Some(self.id)
     }
 
-    pub async fn get_string_cells(&self, limit: Option<usize>) -> Result<CellStringSet,GulpError> {
+    pub async fn get_cells(&self, limit: Option<usize>) -> Result<CellSet,GulpError> {
         let line_set = self.get_lines(limit).await?;
-        let rows = line_set.lines
-            .iter()
-            .filter_map(|line|self.strings_from_line(line,&line_set.headers))
-            .collect();
-        Ok(CellStringSet{headers:line_set.headers, rows})
+        let lh = self.source_format.line_converter();
+        lh.get_cells(&line_set)
     }
-
-    fn strings_from_line(&self, _line: &str,_headers: &Vec<Option<HeaderColumn>>) -> Option<Vec<String>> {
-        todo!()
-    }
-
-    // pub async fn get_cell_rows(&self, limit: Option<usize>) -> Result<CellRowSet,GulpError> {
-    //     let line_set = self.get_lines(limit).await?;
-    //     let rows = line_set.lines
-    //         .iter()
-    //         .filter_map(|line|self.cell_from_line(line,&line_set.headers))
-    //         .collect();
-    //     Ok(CellRowSet{headers:line_set.headers, rows})
-    // }
-
-    // fn cell_from_line(&self, line: &str, headers: &Vec<Option<HeaderColumn>>) -> Option<Vec<crate::cell::Cell>> {
-    //     todo!()
-    // }
 
     pub async fn get_lines(&self, limit: Option<usize>) -> Result<LineSet,GulpError> {
         let limit = limit.unwrap_or(usize::MAX);
