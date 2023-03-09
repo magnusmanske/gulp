@@ -4,7 +4,7 @@ use serde_json::json;
 use crate::header::*;
 use crate::cell::*;
 //use datetime::LocalDateTime;
-// use crate::GenericError;
+// use crate::GulpError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Row {
@@ -68,7 +68,7 @@ impl Row {
             .map_and_drop(|_row| 1).await.ok()?.is_empty())
     }
 /*
-    pub async fn insert_new(&mut self, conn: &mut conn, user_id: DbId) -> Result<(), GenericError> {
+    pub async fn insert_new(&mut self, conn: &mut conn, user_id: DbId) -> Result<(), GulpError> {
         let sql = r#"REPLACE INTO `row` (list_id,row_num,revision_id,json_id,user_id) VALUES (:list_id,:row_num,:revision_id,:json,:user_id)"#;
         let list_id = self.list_id;
         let row_num = self.row_num;

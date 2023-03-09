@@ -12,7 +12,7 @@ use crate::data_source::DataSourceType;
 use crate::header::*;
 use crate::cell::*;
 use crate::row::*;
-use crate::GenericError;
+use crate::GulpError;
 
 const ROW_INSERT_BATCH_SIZE: usize = 1000;
 
@@ -44,7 +44,7 @@ impl List {
         Self::from_id(app, list_id).await
     }
 
-    pub async fn add_access(&self, app: &Arc<AppState>, user_id: DbId, access: &str) -> Result<(),GenericError> {
+    pub async fn add_access(&self, app: &Arc<AppState>, user_id: DbId, access: &str) -> Result<(),GulpError> {
         let list_id = self.id;
         let sql = "INSERT IGNORE INTO `access` (list_id,user_id,`right`) VALUES (:list_id,:user_id,:access)";
         app.get_gulp_conn().await?.exec_drop(sql, params!{list_id,user_id,access}).await?;
@@ -72,11 +72,11 @@ impl List {
         })
     }
 
-    pub async fn get_rows_for_revision(&self, revision_id: DbId) -> Result<Vec<Row>, GenericError> {
+    pub async fn get_rows_for_revision(&self, revision_id: DbId) -> Result<Vec<Row>, GulpError> {
         self.get_rows_for_revision_paginated(revision_id, 0, None).await
     }
 
-    pub async fn get_rows_for_revision_paginated(&self, revision_id: DbId, start: DbId, length: Option<DbId>) -> Result<Vec<Row>, GenericError> {
+    pub async fn get_rows_for_revision_paginated(&self, revision_id: DbId, start: DbId, length: Option<DbId>) -> Result<Vec<Row>, GulpError> {
         let length = length.unwrap_or(DbId::MAX);
         let list_id = self.id ;
         let sql = r#"SELECT row.id,list_id,row_num,revision_id,json,json_md5,user_id,modified
@@ -92,7 +92,7 @@ impl List {
         Ok(rows)
     }
 
-    pub async fn get_users_in_revision(&self, revision_id: DbId) -> Result<HashMap<DbId,String>, GenericError> {
+    pub async fn get_users_in_revision(&self, revision_id: DbId) -> Result<HashMap<DbId,String>, GulpError> {
         let sql = r#"SELECT DISTINCT user_id,user.name FROM `row`,`user`
             WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id AND revision_id<=:revision_id)
             AND list_id=:list_id AND revision_id<=:revision_id AND user_id=user.id"#;
@@ -104,7 +104,7 @@ impl List {
         Ok(ret)
     }
 
-    pub async fn get_users_by_id(&self, user_ids: &Vec<DbId>) -> Result<HashMap<DbId,String>, GenericError> {
+    pub async fn get_users_by_id(&self, user_ids: &Vec<DbId>) -> Result<HashMap<DbId,String>, GulpError> {
         if user_ids.is_empty() {
             return Ok(HashMap::new());
         }
@@ -118,7 +118,7 @@ impl List {
         Ok(ret)
     }
 
-    pub async fn get_rows_in_revision(&self, revision_id: DbId) -> Result<usize, GenericError> {
+    pub async fn get_rows_in_revision(&self, revision_id: DbId) -> Result<usize, GulpError> {
         let sql = r#"SELECT count(*) FROM `row`
             WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id AND revision_id<=:revision_id)
             AND list_id=:list_id AND revision_id<=:revision_id"#;
@@ -129,35 +129,46 @@ impl List {
         Ok(row_number)
     }
 
-    fn get_client() -> Result<reqwest::Client, GenericError> {
+    pub fn get_client() -> Result<reqwest::Client, GulpError> {
         let client = reqwest::Client::builder()
             .user_agent("gulp/0.1")
             .build()?;
         Ok(client)
     }
 
-    pub async fn import_from_pagepile(&self, id: &str, user_id: DbId) -> Result<(), GenericError> {
+
+    pub fn get_text_from_url(url: &str) -> Result<String,GulpError> {
+        let agent = ureq::AgentBuilder::new().build();
+        Ok(agent.get(&url).call()?.into_string()?)
+    }
+
+    pub async fn update_from_pagepile(&self, ds: &DataSource, user_id: DbId) -> Result<(), GulpError> {
         let col_num = match self.header.schema.get_first_wiki_page_column() {
             Some(num) => num,
-            None => return Err("import_from_pagepile: Wrong header schema, needs to have a WikiPage as first column".into()),
+            None => return Err("update_from_pagepile: Wrong header schema, needs to have a WikiPage as first column".into()),
         };
-        let url = format!("https://pagepile.toolforge.org/api.php?id={id}&action=get_data&doit&format=json&metadata=1");
-        let json: serde_json::Value = Self::get_client()?.get(url).send().await?.json().await?;
-        let wiki = json.get("wiki").ok_or_else(||"import_from_pagepile: No field 'wiki'")?;
-        let wiki = wiki.as_str().ok_or_else(||"import_from_pagepile: field 'wiki' not a str")?.to_string();
+        let lines = ds.get_lines(None).await?;
+        let hc = match lines.headers.get(0) {
+            Some(hc) => hc,
+            None => return Err("update_from_pagepile: no header given from pagepile".into()),
+        };
+        let hc = match hc {
+            Some(hc) => hc,
+            None => return Err("update_from_pagepile: no wiki in header column".into()),
+        };
+        let wiki = match &hc.wiki {
+            Some(wiki) => wiki,
+            None => return Err("update_from_pagepile: no wiki in header column".into()),
+        };
         let api_url = format!("https://{}/w/api.php",AppState::get_server_for_wiki(&wiki));
         let api = Api::new(&api_url).await?;
-
-        let pages = json.get("pages").ok_or_else(||"import_from_pagepile: No field 'pages'")?;
-        let pages = pages.as_object().ok_or_else(||"import_from_pagepile: field 'pages' not an object")?;
-        let pages: Vec<String> = pages.keys().cloned().collect();
 
         // TODO delete rows?
         let mut conn = self.app.get_gulp_conn().await?;
         let mut md5s = self.load_json_md5s(&mut conn).await?;
         let mut next_row_num = self.get_max_row_num(&mut conn).await? + 1;
         let mut rows = vec![];
-        for page in &pages {
+        for page in &lines.lines {
             if page.is_empty() {
                 continue;
             }
@@ -181,16 +192,16 @@ impl List {
         Ok(())
     }
 
-    pub async fn import_from_url(&self, url: &str, file_type: DataSourceFormat, user_id: DbId) -> Result<(), GenericError> {
+    pub async fn update_from_url(&self, url: &str, file_type: DataSourceFormat, user_id: DbId) -> Result<(), GulpError> {
         let text = Self::get_client()?.get(url).send().await?.text().await?;
         let _ = match file_type {
             DataSourceFormat::JSONL => self.import_jsonl(&text, user_id).await?,
-            _ => return Err("import_from_url: unsopported type {file_type}".into()),
+            _ => return Err("update_from_url: unsopported type {file_type}".into()),
         };
         Ok(())
     }
 
-    async fn load_json_md5s(&self, conn: &mut Conn) -> Result<HashSet<String>,GenericError> {
+    async fn load_json_md5s(&self, conn: &mut Conn) -> Result<HashSet<String>,GulpError> {
         let list_id = self.id;
         let sql = r#"SELECT json_md5 FROM `row`
             WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)
@@ -202,7 +213,7 @@ impl List {
         Ok(ret)
     }
 
-    async fn import_jsonl(&self, text: &str, user_id: DbId) -> Result<(), GenericError> {
+    async fn import_jsonl(&self, text: &str, user_id: DbId) -> Result<(), GulpError> {
         // TODO delete rows?
         let mut conn = self.app.get_gulp_conn().await?;
         let mut md5s = self.load_json_md5s(&mut conn).await?;
@@ -232,7 +243,7 @@ impl List {
         Ok(())
     }
 
-    async fn flush_row_insert(&self, conn: &mut Conn, rows: &mut Vec<Row>) -> Result<(), GenericError> {
+    async fn flush_row_insert(&self, conn: &mut Conn, rows: &mut Vec<Row>) -> Result<(), GulpError> {
         if rows.is_empty() {
             return Ok(());
         }
@@ -257,7 +268,7 @@ impl List {
         Ok(())
     }
 
-    pub async fn get_sources(&self) -> Result<Vec<DataSource>, GenericError> {
+    pub async fn get_sources(&self) -> Result<Vec<DataSource>, GulpError> {
         let list_id = self.id;
         let sql = r#"SELECT id,list_id,source_type,source_format,location,user_id FROM data_source WHERE list_id=:list_id"#;
         let sources = self.app.get_gulp_conn().await?
@@ -269,7 +280,7 @@ impl List {
 
     /// Checks if a revision_id increase is necessary.
     /// Returns the new current revision_id (which might be unchanged).
-    pub async fn snapshot(&mut self) -> Result<DbId, GenericError> {
+    pub async fn snapshot(&mut self) -> Result<DbId, GulpError> {
         let mut conn = self.app.get_gulp_conn().await?;
         // Check if there is a need to create a new snapshot, that is, increase the revision ID
         let sql = "SELECT count(id) FROM `row` WHERE list_id=:list_id AND revision_id=:revision_id" ;
@@ -297,12 +308,12 @@ impl List {
         Ok(self.revision_id)
     }
 
-    async fn check_json_exists(&self, _conn: &mut Conn, _json_text: &str, _json_md5: &str) -> Result<bool, GenericError> {
+    async fn check_json_exists(&self, _conn: &mut Conn, _json_text: &str, _json_md5: &str) -> Result<bool, GulpError> {
         // Already checked via md5, might have to implement if collisions occur
         Ok(true)
     }
 
-    async fn get_or_ignore_new_row(&self, conn: &mut Conn, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId, user_id: DbId) -> Result<Option<Row>, GenericError> {
+    async fn get_or_ignore_new_row(&self, conn: &mut Conn, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId, user_id: DbId) -> Result<Option<Row>, GulpError> {
         let cells2j: Vec<serde_json::Value> = cells
             .iter()
             .zip(self.header.schema.columns.iter())
@@ -337,16 +348,16 @@ impl List {
         Ok(None)
     }
 
-    pub async fn update_from_source(&self, source: &DataSource, user_id: DbId) -> Result<(),GenericError> {
+    pub async fn update_from_source(&self, source: &DataSource, user_id: DbId) -> Result<(),GulpError> {
         match source.source_type {
-            DataSourceType::URL => self.import_from_url(&source.location,source.source_format.to_owned(), user_id).await?,
+            DataSourceType::URL => self.update_from_url(&source.location,source.source_format.to_owned(), user_id).await?,
             DataSourceType::FILE => todo!(),
-            DataSourceType::PAGEPILE => self.import_from_pagepile(&source.location, user_id).await?,
+            DataSourceType::PAGEPILE => self.update_from_pagepile(&source, user_id).await?,
         }
         Ok(())
     }
 
-    async fn get_max_row_num(&self, conn: &mut Conn) -> Result<DbId, GenericError> {
+    async fn get_max_row_num(&self, conn: &mut Conn) -> Result<DbId, GulpError> {
         let list_id = self.id;
         let sql = r#"SELECT IFNULL(max(row_num),0) FROM `row` 
             WHERE revision_id=(SELECT max(revision_id) FROM `row` i WHERE i.row_num = row.row_num AND i.list_id=:list_id)

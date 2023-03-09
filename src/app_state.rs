@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use tokio::sync::{Mutex, RwLock};
 use std::sync::Arc;
 use crate::{list::List, header::DbId};
-use crate::GenericError;
+use crate::GulpError;
 use crate::database_session_store::DatabaseSessionStore;
 
 type ListMutex = Arc<Mutex<List>>;
@@ -28,7 +28,7 @@ pub struct AppState {
 
 impl AppState {
     /// Create an AppState object from a config JSION file
-    pub fn from_config_file(filename: &str) -> Result<Self,GenericError> {
+    pub fn from_config_file(filename: &str) -> Result<Self,GulpError> {
         let mut path = env::current_dir().expect("Can't get CWD");
         path.push(filename);
         let file = File::open(&path)?;
@@ -154,7 +154,7 @@ impl AppState {
         }
     }
 
-    pub async fn get_all_header_schemas(&self) -> Result<Vec<crate::header::HeaderSchema>,GenericError> {
+    pub async fn get_all_header_schemas(&self) -> Result<Vec<crate::header::HeaderSchema>,GulpError> {
         let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE id>"#;
         Ok(self.get_gulp_conn().await.unwrap()
             .exec_iter(sql,()).await.unwrap()

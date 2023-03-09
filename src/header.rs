@@ -96,7 +96,7 @@ impl HeaderSchema {
         })
     }
 
-    pub async fn create_in_db(&mut self, app: &std::sync::Arc<AppState>) -> Result<DbId,crate::GenericError> {
+    pub async fn create_in_db(&mut self, app: &std::sync::Arc<AppState>) -> Result<DbId,crate::GulpError> {
         if self.id!=0 {
             return Err("create_in_db: Already has an id".into());
         }
@@ -166,7 +166,7 @@ impl Header {
         })
     }
 
-    pub async fn create_in_db(&mut self, app: &std::sync::Arc<AppState>) -> Result<DbId,crate::GenericError> {
+    pub async fn create_in_db(&mut self, app: &std::sync::Arc<AppState>) -> Result<DbId,crate::GulpError> {
         if self.id!=0 {
             return Err("create_in_db: Already has an id".into());
         }

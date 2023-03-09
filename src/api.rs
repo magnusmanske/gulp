@@ -22,7 +22,7 @@ use axum::{
     extract::{Path,State,Query,Multipart,TypedHeader,DefaultBodyLimit},
     response::{IntoResponse, Response},
 };
-use crate::GenericError;
+use crate::GulpError;
 
 const MAX_UPLOAD_MB: usize = 50;
 
@@ -104,7 +104,8 @@ async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path
         None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{} perhaps?",source.list_id)}))).into_response(),
     };
     let list = list.lock().await;
-    match list.update_from_source(&source, user_id).await {
+    let x = list.update_from_source(&source, user_id).await;
+    match x {
         Ok(_) => {}
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error updating from source: {}",e.to_string())}))).into_response(),
     }
@@ -242,14 +243,15 @@ async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Qu
     }
 }
 
-fn rows_as_csv(list: &List, rows: &Vec<crate::row::Row>) -> Result<String,GenericError> {
+fn rows_as_csv(list: &List, rows: &Vec<crate::row::Row>) -> Result<String,GulpError> {
     // TODO header
     let mut wtr = WriterBuilder::new().from_writer(vec![]);
     for row in rows {
         wtr.write_record(&row.as_vec(&list.header))?;
     }
-    let inner = wtr.into_inner()?;
-    Ok(String::from_utf8(inner)?)
+    let inner = wtr.into_inner().map_err(|e|GulpError::String(e.to_string()))?;
+    let ret = String::from_utf8(inner)?;
+    Ok(ret)
 }
 
 async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
@@ -309,7 +311,7 @@ async fn upload(mut multipart: Multipart) {
 }
 
 
-pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError> {
+pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GulpError> {
     tracing_subscriber::fmt::init();
 
     let cors = CorsLayer::new().allow_origin(Any);
@@ -348,9 +350,10 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GenericError>
 
     let addr = SocketAddr::from((ip, port));
     tracing::info!("listening on http://{}", addr);
-    Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await?;
+    if let Err(e) = Server::bind(&addr).serve(app.into_make_service()).await {
+        return Err(GulpError::String(format!("Server fail: {e}")));
+    }
+        
 
     Ok(())
 }
