@@ -86,16 +86,13 @@ impl DataSourceLineConverter for DataSourceFormatJSONL {
             let cells: Vec<Option<Cell>> = array
                 .iter()
                 .zip(line_set.headers.iter())
-                .map(|(value,column)|{
-                    Cell::from_value(value, column)
-                })
+                .map(|(value,column)|Cell::from_value(value, column))
                 .collect();
             rows.push(cells);
         }
         Ok(CellSet{headers:line_set.headers.to_owned(),rows})
     }
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DataSourceFormatPagePile {}
@@ -112,7 +109,58 @@ impl DataSourceLineConverter for DataSourceFormatPagePile {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSourceFormatCSV {}
 
+impl DataSourceLineConverter for DataSourceFormatCSV {
+    fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> {
+        let data = line_set.lines.join("\n");
+        let data = data.as_bytes();
+        let mut rdr = csv::ReaderBuilder::new()
+            .from_reader(data);
+        let mut rows: Vec<_> = vec!();
+        for result in rdr.records() {
+            let record = result?;
+            let cells: Vec<Option<Cell>> = record
+                .iter()
+                .zip(line_set.headers.iter())
+                .map(|(value,column)|{
+                    let value = serde_json::json!(value);
+                    Cell::from_value(&value, column)
+                })
+                .collect();
+            rows.push(cells);            
+        }
+        Ok(CellSet{headers:line_set.headers.to_owned(),rows})
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSourceFormatTSV {}
+
+impl DataSourceLineConverter for DataSourceFormatTSV {
+    fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> {
+        let data = line_set.lines.join("\n");
+        let data = data.as_bytes();
+        let mut rdr = csv::ReaderBuilder::new()
+            .delimiter(b'\t')
+            .from_reader(data);
+        let mut rows: Vec<_> = vec!();
+        for result in rdr.records() {
+            let record = result?;
+            let cells: Vec<Option<Cell>> = record
+                .iter()
+                .zip(line_set.headers.iter())
+                .map(|(value,column)|{
+                    let value = serde_json::json!(value);
+                    Cell::from_value(&value, column)
+                })
+                .collect();
+            rows.push(cells);            
+        }
+        Ok(CellSet{headers:line_set.headers.to_owned(),rows})
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum DataSourceFormat {
@@ -144,8 +192,8 @@ impl DataSourceFormat {
 
     pub fn line_converter(&self) -> Arc<Box<dyn DataSourceLineConverter>> {
         Arc::new(match self {
-            Self::CSV => todo!(),
-            Self::TSV => todo!(),
+            Self::CSV => Box::new(DataSourceFormatTSV {}),
+            Self::TSV => Box::new(DataSourceFormatCSV {}),
             Self::JSONL => Box::new(DataSourceFormatJSONL {}),
             Self::PAGEPILE => Box::new(DataSourceFormatPagePile {}),
         })
