@@ -90,6 +90,20 @@ async fn list_sources(State(state): State<Arc<AppState>>, Path(id): Path<DbId>,)
     (StatusCode::OK, Json(j)).into_response()
 }
 
+async fn source_header(State(state): State<Arc<AppState>>, Path(source_id): Path<DbId>, Query(_params): Query<HashMap<String, String>>,) -> Response {
+    // TODO params with header
+    let source = match DataSource::from_db(&state, source_id).await {
+        Some(source) => source,
+        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving source; No source #{source_id} perhaps?")}))).into_response(),
+    };
+    let cell_set = match source.get_cells(Some(20)).await {
+        Ok(cell_set) => cell_set,
+        Err(e) => return json_error(&e.to_string()),
+    };
+    let j = json!({"status":"OK","headers":cell_set.headers,"rows":cell_set.rows});
+    (StatusCode::OK, Json(j)).into_response()
+}
+
 async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path<DbId>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let user_id = match get_user_id(&state,&cookies).await {
         Some(user_id) => user_id,
@@ -334,6 +348,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GulpError> {
         
 
         .route("/source/update/:source_id", get(source_update))
+        .route("/source/header/:source_id", get(source_header))
         .route("/source/create/:list_id", get(source_create))
 
         .route("/upload", post(upload))
