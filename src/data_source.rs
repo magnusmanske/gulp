@@ -102,16 +102,8 @@ pub struct DataSourceFormatPagePile {}
 impl DataSourceLineConverter for DataSourceFormatPagePile {
     fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> {
         let header = line_set.headers.get(0).ok_or_else(||"PagePile line_set has no headers")?;
-
         let wiki = header.wiki.as_ref().ok_or_else(||"PagePile first header has no wiki")?;
-        let api_url = format!("https://{}/w/api.php",AppState::get_server_for_wiki(wiki));
-        let api = std::thread::spawn(move || {
-            // let handle = tokio::runtime::Handle::current();
-            let rt  = tokio::runtime::Runtime::new().unwrap();
-            let api = rt.block_on(async { wikibase::mediawiki::api::Api::new(&api_url).await } );
-            api
-        }).join().expect("Thread panicked")?;
-
+        let api = AppState::get_api_for_wiki(wiki)?;
         let rows: Vec<_> = line_set.lines
             .iter()
             .map(|line|wikibase::mediawiki::title::Title::new_from_full(&line, &api))

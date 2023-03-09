@@ -86,6 +86,14 @@ impl AppState {
         self.gulp_pool.get_conn().await
     }
 
+    pub fn get_api_for_wiki(wiki: &str) -> Result<wikibase::mediawiki::api::Api,GulpError> {
+        let api_url = format!("https://{}/w/api.php",AppState::get_server_for_wiki(wiki));
+        let api = std::thread::spawn(move || {
+            tokio::runtime::Runtime::new().unwrap().block_on(async { wikibase::mediawiki::api::Api::new(&api_url).await } )
+        }).join().expect("Thread panicked")?;
+        Ok(api)
+    }
+
     async fn get_wiki_user_id(&self, username: &str) -> Option<DbId> {
         let sql = "SELECT id FROM `user` WHERE `name`=:username AND is_wiki_user=1" ;
         self.get_gulp_conn().await.ok()?
