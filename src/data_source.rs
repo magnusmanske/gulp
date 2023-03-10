@@ -70,6 +70,17 @@ pub struct CellSet {
     pub rows: Vec<Vec<Option<Cell>>>,
 }
 
+impl CellSet {
+    pub fn get_cells_in_column(&self, column: usize) -> Vec<Cell> {
+        self.rows
+            .iter()
+            .filter_map(|row|row.get(column))
+            .cloned()
+            .filter_map(|c|c)
+            .collect()
+    }
+}
+
 /// Trait for converting LineSet via various formats into CellSet
 pub trait DataSourceLineConverter {
     fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> ;
@@ -79,20 +90,38 @@ pub trait DataSourceLineConverter {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DataSourceFormatJSONL {}
 
+impl DataSourceFormatJSONL {
+    fn guess_headers(&self, lines: &Vec<String>) -> Vec<HeaderColumn> {
+        let columns = lines
+            .iter()
+            .filter_map(|line|serde_json::from_str::<serde_json::Value>(line).ok())
+            .filter_map(|v|v.as_array().cloned())
+            .map(|array|array.len())
+            .max()
+            .unwrap_or(0);
+        let header = HeaderColumn{ column_type: ColumnType::String, wiki: None, string: None, namespace_id: None };
+        std::iter::repeat(header).take(columns).collect()
+    }
+}
+
 impl DataSourceLineConverter for DataSourceFormatJSONL {
     fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> {
+        let mut headers = line_set.headers.to_owned();
+        if headers.is_empty() {
+            headers = self.guess_headers(&line_set.lines);
+        }
         let mut rows: Vec<_> = vec!();
         for line in &line_set.lines {
             let json: serde_json::Value = serde_json::from_str(line)?;
             let array = json.as_array().ok_or_else(||"import_jsonl: valid JSON but not an array: {row}")?;
             let cells: Vec<Option<Cell>> = array
                 .iter()
-                .zip(line_set.headers.iter())
+                .zip(headers.iter())
                 .map(|(value,column)|Cell::from_value(value, column))
                 .collect();
             rows.push(cells);
         }
-        Ok(CellSet{headers:line_set.headers.to_owned(),rows})
+        Ok(CellSet{headers:headers.to_owned(),rows})
     }
 }
 
@@ -289,7 +318,20 @@ impl DataSource {
         lh.get_cells(&line_set)
     }
 
-    pub async fn get_lines(&self, limit: Option<usize>) -> Result<LineSet,GulpError> {
+    pub async fn guess_headers(&self, limit: Option<usize>, app: &Arc<AppState>) -> Result<Vec<HeaderColumn>,GulpError> {
+        let line_set = self.get_lines(limit).await?;
+        let lh = self.source_format.line_converter();
+        let cell_set = lh.get_cells(&line_set)?;
+        let mut new_headers = vec![];
+        for (column,header) in cell_set.headers.iter().enumerate() {
+            let cells = cell_set.get_cells_in_column(column);
+            new_headers.push(header.guess(cells, app).await);
+        }
+        Ok(new_headers)
+    }
+
+
+    async fn get_lines(&self, limit: Option<usize>) -> Result<LineSet,GulpError> {
         let limit = limit.unwrap_or(usize::MAX);
         let lh = self.source_type.line_handler();
         lh.get_lines(&self, limit)

@@ -1,8 +1,18 @@
+use futures::future::join_all;
 use mysql_async::{prelude::*, Conn};
+use regex::Regex;
+use std::{collections::HashMap, sync::Arc};
 use serde::Serialize;
 use serde_json::json;
 
-use crate::app_state::AppState;
+use crate::{app_state::AppState, cell::Cell};
+
+lazy_static!{
+    static ref RE_WIKIDATA : Regex = Regex::new(r#"^[PQ]\d+$"#).expect("Regexp error");
+    static ref RE_WIKIDATA_ITEM : Regex = Regex::new(r#"^Q\d+$"#).expect("Regexp error");
+    static ref RE_FILE : Regex = Regex::new(r#"^(?i).+\.(jpg|jpeg|tif|tiff|png)$"#).expect("Regexp error");
+}
+
 
 pub type NamespaceType = i64;
 pub type DbId = u64;
@@ -42,6 +52,79 @@ impl HeaderColumn {
             namespace_id: Self::value_option_to_namespace_id(value.get("namespace_id")),
             string: Self::value_option_to_string_option(value.get("string")),
         })
+    }
+
+    pub async fn guess(&self, cells: Vec<Cell>, _app: &Arc<AppState>) -> HeaderColumn {
+        if self.column_type!=ColumnType::String || self.wiki.is_some() || self.string.is_some() || self.namespace_id.is_some() {
+            return self.to_owned();
+        }
+        let mut pages_to_check = vec![];
+        let mut files_to_check = vec![];
+        let mut stats = HashMap::from([
+            ("total",0),
+            ("wikidata",0),
+            ("wikidata_ns0",0),
+            ("file",0),
+            ("commons_ns6",0),
+            ]);
+        for cell in &cells {
+            *stats.get_mut("total").unwrap() += 1 ;
+            match cell {
+                Cell::WikiPage(_) => todo!(),
+                Cell::String(s) => {
+                    *stats.get_mut("wikidata").unwrap() += RE_WIKIDATA.is_match(&s) as u32;
+                    *stats.get_mut("wikidata_ns0").unwrap() += RE_WIKIDATA_ITEM.is_match(&s) as u32;
+                    if RE_FILE.is_match(&s) {
+                        *stats.get_mut("file").unwrap() += 1;
+                        files_to_check.push(format!("File:{s}"));
+                    }
+                    pages_to_check.push(s.replace("_"," "));
+                },
+            }
+        }
+        if !pages_to_check.is_empty() {
+            // todo!()
+        }
+        if !files_to_check.is_empty() {
+            // `urls` needs to outlive `futures`
+            let urls: Vec<_> = files_to_check
+                .chunks(50)
+                .map(|chunk|format!("https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=info&titles={}",chunk.join("|")))
+                .collect();
+            let futures: Vec<_> = urls.iter().map(|url|AppState::get_url_as_json(url)).collect();
+            let files_found: usize = join_all(futures)
+                .await
+                .iter()
+                .cloned()
+                .filter_map(|r|r)
+                .filter_map(|r|r.get("query").map(|r|r.to_owned()))
+                .filter_map(|r|r.get("pages").map(|r|r.to_owned()))
+                .filter_map(|r|r.as_object().map(|r|r.to_owned()))
+                .map(|o|o.values().cloned().collect::<Vec<serde_json::Value>>())
+                .flatten()
+                .filter(|v|v.get("missing").is_none())
+                .count();
+            *stats.get_mut("commons_ns6").unwrap() += files_found as u32;
+        }
+        if stats["wikidata"]==stats["total"] {
+            let ret = HeaderColumn {
+                column_type: ColumnType::WikiPage, 
+                wiki: Some("wikidatawiki".into()),
+                string: None, 
+                namespace_id: if stats["wikidata_ns0"]==stats["total"] { Some(0) } else { None },
+            };
+            return ret;
+        }
+        if stats["commons_ns6"]>=stats["total"]*9/10 { // 90% are Commons files, good enough
+            let ret = HeaderColumn {
+                column_type: ColumnType::WikiPage, 
+                wiki: Some("commonswiki".into()),
+                string: None, 
+                namespace_id: Some(6),
+            };
+            return ret;
+        }
+        return self.to_owned();
     }
 
     fn value_option_to_namespace_id(vo: Option<&serde_json::Value>) -> Option<NamespaceType> {

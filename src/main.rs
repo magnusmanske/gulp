@@ -47,8 +47,8 @@ async fn main() -> Result<(), GulpError> {
         }
         Some(Commands::Test) => {
             let ds = DataSource::from_db(&app,1).await.unwrap();
-            let lines = ds.get_lines(Some(100)).await.unwrap();
-            println!("{lines:?}");
+            let headers = ds.guess_headers(Some(100), &app).await.unwrap();
+            println!("{headers:?}");
 
             // let session = app.store.load_session("yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw=".to_string()).await;
             // let session = session.unwrap().unwrap();
@@ -97,4 +97,5 @@ async fn main() -> Result<(), GulpError> {
 
 /*
 ssh magnus@tools-login.wmflabs.org -L 3308:tools-db:3306 -N &
+ssh magnus@tools-login.wmflabs.org -L 3309:wikidatawiki.analytics.db.svc.wikimedia.cloud:3306 -N &
 */

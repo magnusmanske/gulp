@@ -18,6 +18,7 @@ type ListMutex = Arc<Mutex<List>>;
 pub struct AppState {
     lists: Arc<RwLock<HashMap<DbId,ListMutex>>>,
     gulp_pool: mysql_async::Pool,
+    wikidata_pool: mysql_async::Pool,
     _import_file_path: String,
     pub consumer_token: String,
     pub secret_token: String,
@@ -53,9 +54,11 @@ impl AppState {
         .set_redirect_uri(RedirectUrl::new(redirect_url.to_string()).unwrap());
 
         let gulp_pool = Self::create_pool(&config["gulp"]);
+        let wikidata_pool = Self::create_pool(&config["wikidata"]);
         let ret = Self {
             lists: Arc::new(RwLock::new(HashMap::new())),
             gulp_pool: gulp_pool.clone(),
+            wikidata_pool,
             // mnm_pool: Self::create_pool(&config["mixnmatch"]),
             _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
             consumer_token: config["consumer_token"].as_str().unwrap().to_string(),
@@ -84,6 +87,11 @@ impl AppState {
     /// Returns a connection to the GULP tool database
     pub async fn get_gulp_conn(&self) -> Result<Conn, mysql_async::Error> {
         self.gulp_pool.get_conn().await
+    }
+
+    /// Returns a connection to the wikidata database
+    pub async fn get_wikidata_conn(&self) -> Result<Conn, mysql_async::Error> {
+        self.wikidata_pool.get_conn().await
     }
 
     pub fn get_api_for_wiki(wiki: &str) -> Result<wikibase::mediawiki::api::Api,GulpError> {
@@ -168,6 +176,10 @@ impl AppState {
             .exec_iter(sql,()).await.unwrap()
             .map_and_drop(|row| crate::header::HeaderSchema::from_row(&row)).await.unwrap()
             .iter().filter_map(|s|s.to_owned()).collect())
+    }
+
+    pub async fn get_url_as_json(url: &str) -> Option<Value> {
+        reqwest::get(url).await.ok()?.json::<Value>().await.ok()
     }
 }
 
