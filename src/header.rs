@@ -60,7 +60,7 @@ impl HeaderColumn {
         }
         let mut pages_to_check = vec![];
         let mut files_to_check = vec![];
-        let mut stats = HashMap::from([
+        let mut stats: HashMap<&str,usize> = HashMap::from([
             ("total",0),
             ("wikidata",0),
             ("wikidata_ns0",0),
@@ -70,10 +70,10 @@ impl HeaderColumn {
         for cell in &cells {
             *stats.get_mut("total").unwrap() += 1 ;
             match cell {
-                Cell::WikiPage(_) => todo!(),
+                Cell::WikiPage(_) => {}, // Ignore
                 Cell::String(s) => {
-                    *stats.get_mut("wikidata").unwrap() += RE_WIKIDATA.is_match(&s) as u32;
-                    *stats.get_mut("wikidata_ns0").unwrap() += RE_WIKIDATA_ITEM.is_match(&s) as u32;
+                    *stats.get_mut("wikidata").unwrap() += RE_WIKIDATA.is_match(&s) as usize;
+                    *stats.get_mut("wikidata_ns0").unwrap() += RE_WIKIDATA_ITEM.is_match(&s) as usize;
                     if RE_FILE.is_match(&s) {
                         *stats.get_mut("file").unwrap() += 1;
                         files_to_check.push(format!("File:{s}"));
@@ -83,28 +83,28 @@ impl HeaderColumn {
             }
         }
         if !pages_to_check.is_empty() {
-            // todo!()
+            let mut best_wiki = "";
+            let mut best_count = 0;
+            let wikis = ["enwiki","dewiki","frwiki","nlwiki","itwiki"];
+            let futures: Vec<_> = wikis.iter().map(|wiki|self.count_existing_pages(wiki, &pages_to_check)).collect();
+            for (page_count,wiki) in join_all(futures).await.iter().zip(wikis.iter()) {
+                if *page_count > best_count {
+                    best_count = *page_count;
+                    best_wiki = wiki;
+                }
+            }
+            if best_count > stats["total"]*9/10 {
+                let ret = HeaderColumn {
+                    column_type: ColumnType::WikiPage, 
+                    wiki: Some(best_wiki.into()),
+                    string: None, 
+                    namespace_id: None,
+                };
+                return ret;
+            }
         }
         if !files_to_check.is_empty() {
-            // `urls` needs to outlive `futures`
-            let urls: Vec<_> = files_to_check
-                .chunks(50)
-                .map(|chunk|format!("https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=info&titles={}",chunk.join("|")))
-                .collect();
-            let futures: Vec<_> = urls.iter().map(|url|AppState::get_url_as_json(url)).collect();
-            let files_found: usize = join_all(futures)
-                .await
-                .iter()
-                .cloned()
-                .filter_map(|r|r)
-                .filter_map(|r|r.get("query").map(|r|r.to_owned()))
-                .filter_map(|r|r.get("pages").map(|r|r.to_owned()))
-                .filter_map(|r|r.as_object().map(|r|r.to_owned()))
-                .map(|o|o.values().cloned().collect::<Vec<serde_json::Value>>())
-                .flatten()
-                .filter(|v|v.get("missing").is_none())
-                .count();
-            *stats.get_mut("commons_ns6").unwrap() += files_found as u32;
+            *stats.get_mut("commons_ns6").unwrap() += self.count_existing_pages("commonswiki",&files_to_check).await;
         }
         if stats["wikidata"]==stats["total"] {
             let ret = HeaderColumn {
@@ -125,6 +125,28 @@ impl HeaderColumn {
             return ret;
         }
         return self.to_owned();
+    }
+
+    async fn count_existing_pages(&self, wiki: &str, pages: &Vec<String>) -> usize {
+        let server = AppState::get_server_for_wiki(wiki);
+        // `urls` needs to outlive `futures`
+        let urls: Vec<_> = pages
+            .chunks(50)
+            .map(|chunk|format!("https://{server}/w/api.php?action=query&format=json&prop=info&titles={}",chunk.join("|")))
+            .collect();
+        let futures: Vec<_> = urls.iter().map(|url|AppState::get_url_as_json(url)).collect();
+        join_all(futures)
+            .await
+            .iter()
+            .cloned()
+            .filter_map(|r|r)
+            .filter_map(|r|r.get("query").map(|r|r.to_owned()))
+            .filter_map(|r|r.get("pages").map(|r|r.to_owned()))
+            .filter_map(|r|r.as_object().map(|r|r.to_owned()))
+            .map(|o|o.values().cloned().collect::<Vec<serde_json::Value>>())
+            .flatten()
+            .filter(|v|v.get("missing").is_none())
+            .count()
     }
 
     fn value_option_to_namespace_id(vo: Option<&serde_json::Value>) -> Option<NamespaceType> {
@@ -259,7 +281,6 @@ impl Header {
         let revision_id = self.revision_id;
         let header_schema_id = self.schema.id;
         let sql = r#"INSERT INTO `header` (`list_id`,`revision_id`,`header_schema_id`) VALUES (:list_id,:revision_id,:header_schema_id)"# ;
-        //println!("{sql}\n{list_id}/{revision_id}/{header_schema_id}");
         conn.exec_drop(sql, params!{list_id,revision_id,header_schema_id}).await?;
         if let Some(id) = conn.last_insert_id() {
             self.id = id

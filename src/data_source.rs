@@ -20,7 +20,7 @@ impl DataSourceLineHandler for DataSourceTypeUrl {
         let url = &ds.location;
         //let text = crate::list::List::get_client()?.get(url).send().await?.text().await?;
         let text = crate::list::List::get_text_from_url(&url)?;
-        let lines : Vec<String> = text.split("\n").map(|s|s.to_string()).take(limit).collect();
+        let lines : Vec<String> = text.split("\n").map(|s|s.trim().to_string()).take(limit).collect();
         Ok(LineSet{ lines, headers: vec![] })
     }
 }
@@ -32,7 +32,7 @@ pub struct DataSourceTypeFile {}
 impl DataSourceLineHandler for DataSourceTypeFile {
     fn get_lines(&self, ds: &DataSource, limit: usize) -> Result<LineSet,GulpError> {
         let file = File::open(&ds.location).unwrap();
-        let lines = io::BufReader::new(file).lines().filter_map(|row|row.ok()).take(limit).collect();
+        let lines = io::BufReader::new(file).lines().filter_map(|row|row.ok()).map(|s|s.trim().to_string()).take(limit).collect();
         Ok(LineSet{ lines, headers: vec![] })
     }
 }
@@ -148,24 +148,7 @@ pub struct DataSourceFormatCSV {}
 
 impl DataSourceLineConverter for DataSourceFormatCSV {
     fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> {
-        let data = line_set.lines.join("\n");
-        let data = data.as_bytes();
-        let mut rdr = csv::ReaderBuilder::new()
-            .from_reader(data);
-        let mut rows: Vec<_> = vec!();
-        for result in rdr.records() {
-            let record = result?;
-            let cells: Vec<Option<Cell>> = record
-                .iter()
-                .zip(line_set.headers.iter())
-                .map(|(value,column)|{
-                    let value = serde_json::json!(value);
-                    Cell::from_value(&value, column)
-                })
-                .collect();
-            rows.push(cells);            
-        }
-        Ok(CellSet{headers:line_set.headers.to_owned(),rows})
+        DataSource::get_cells_xsv(b',', line_set)
     }
 }
 
@@ -174,25 +157,7 @@ pub struct DataSourceFormatTSV {}
 
 impl DataSourceLineConverter for DataSourceFormatTSV {
     fn get_cells(&self, line_set: &LineSet) -> Result<CellSet,GulpError> {
-        let data = line_set.lines.join("\n");
-        let data = data.as_bytes();
-        let mut rdr = csv::ReaderBuilder::new()
-            .delimiter(b'\t')
-            .from_reader(data);
-        let mut rows: Vec<_> = vec!();
-        for result in rdr.records() {
-            let record = result?;
-            let cells: Vec<Option<Cell>> = record
-                .iter()
-                .zip(line_set.headers.iter())
-                .map(|(value,column)|{
-                    let value = serde_json::json!(value);
-                    Cell::from_value(&value, column)
-                })
-                .collect();
-            rows.push(cells);            
-        }
-        Ok(CellSet{headers:line_set.headers.to_owned(),rows})
+        DataSource::get_cells_xsv(b'\t', line_set)
     }
 }
 
@@ -226,8 +191,8 @@ impl DataSourceFormat {
 
     pub fn line_converter(&self) -> Arc<Box<dyn DataSourceLineConverter>> {
         Arc::new(match self {
-            Self::CSV => Box::new(DataSourceFormatTSV {}),
-            Self::TSV => Box::new(DataSourceFormatCSV {}),
+            Self::CSV => Box::new(DataSourceFormatCSV {}),
+            Self::TSV => Box::new(DataSourceFormatTSV {}),
             Self::JSONL => Box::new(DataSourceFormatJSONL {}),
             Self::PAGEPILE => Box::new(DataSourceFormatPagePile {}),
         })
@@ -335,6 +300,33 @@ impl DataSource {
         let limit = limit.unwrap_or(usize::MAX);
         let lh = self.source_type.line_handler();
         lh.get_lines(&self, limit)
+    }
+
+    pub fn get_cells_xsv(separator: u8, line_set: &LineSet) -> Result<CellSet,GulpError> {
+        let data = line_set.lines.join("\n");
+        let data = data.as_bytes();
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .delimiter(separator)
+            .from_reader(data);
+        let mut rows: Vec<_> = vec!();
+        let mut headers = line_set.headers.to_owned();
+        for result in rdr.records() {
+            let record = result?;
+            while headers.len()<record.len() {
+                headers.push(HeaderColumn { column_type: ColumnType::String, wiki: None, string: None, namespace_id: None });
+            }
+            let cells: Vec<Option<Cell>> = record
+                .iter()
+                .zip(headers.iter())
+                .map(|(value,column)|{
+                    let value = serde_json::Value::String(value.to_string());
+                    Cell::from_value(&value, column)
+                })
+                .collect();
+            rows.push(cells);            
+        }
+        Ok(CellSet{headers,rows})
     }
 
 }
