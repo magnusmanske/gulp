@@ -47,7 +47,7 @@ async fn main() -> Result<(), GulpError> {
         }
         Some(Commands::Test) => {
             let ds = DataSource::from_db(&app,6).await.unwrap();
-            let headers = ds.guess_headers(Some(100), &app).await.unwrap();
+            let headers = ds.guess_headers(Some(100)).await.unwrap();
             println!("{headers:?}");
 
             // let session = app.store.load_session("yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw=".to_string()).await;

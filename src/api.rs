@@ -49,7 +49,7 @@ async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeade
 async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
+        None => return json_error_gone(&format!("Error retrieving list; No list #{id} perhaps?")),
     };
     let list = list.lock().await;
     let revision_id: DbId = params.get("revision_id").map(|s|s.parse::<DbId>().unwrap_or(list.revision_id)).unwrap_or(list.revision_id);
@@ -74,7 +74,7 @@ async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
 async fn list_sources(State(state): State<Arc<AppState>>, Path(id): Path<DbId>,) -> Response {
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
+        None => return json_error_gone(&format!("Error retrieving list; No list #{id} perhaps?")),
     };
     let list = list.lock().await;
     let sources = match list.get_sources().await {
@@ -94,12 +94,14 @@ async fn source_header(State(state): State<Arc<AppState>>, Path(source_id): Path
     // TODO params with header
     let source = match DataSource::from_db(&state, source_id).await {
         Some(source) => source,
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving source; No source #{source_id} perhaps?")}))).into_response(),
+        None => return json_error_gone(&format!("Error retrieving source; No source #{source_id} perhaps?")),
     };
-    let cell_set = match source.get_cells(Some(20)).await {
+    let cell_set_result = source.guess_headers(Some(50)).await;
+    let cell_set = match cell_set_result {
         Ok(cell_set) => cell_set,
         Err(e) => return json_error(&e.to_string()),
     };
+
     let j = json!({"status":"OK","headers":cell_set.headers,"rows":cell_set.rows});
     (StatusCode::OK, Json(j)).into_response()
 }
@@ -111,11 +113,11 @@ async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path
     };
     let source = match DataSource::from_db(&state, source_id).await {
         Some(source) => source,
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving source; No source #{source_id} perhaps?")}))).into_response(),
+        None => return json_error_gone(&format!("Error retrieving source; No source #{source_id} perhaps?")),
     };
     let list = match AppState::get_list(&state,source.list_id).await {
         Some(list) => list,
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{} perhaps?",source.list_id)}))).into_response(),
+        None => return json_error_gone(&format!("Error retrieving list; No list #{} perhaps?",source.list_id)),
     };
     let list = list.lock().await;
     let x = list.update_from_source(&source, user_id).await;
@@ -135,24 +137,24 @@ async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<D
     let ds_type = match params.get("type").map(|s|DataSourceType::new(s)) {
         Some(ds_format) => match ds_format {
             Some(ds_format) => ds_format,
-            None => return (StatusCode::GONE ,Json(json!({"status":format!("Invalid type")}))).into_response(),
+            None => return json_error("Invalid type"),
         },
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Missing type")}))).into_response(),
+        None => return json_error("Missing type"),
     };
     let ds_format = match params.get("format").map(|s|DataSourceFormat::new(s)) {
         Some(ds_format) => match ds_format {
             Some(ds_format) => ds_format,
-            None => return (StatusCode::GONE ,Json(json!({"status":format!("Invalid format")}))).into_response(),
+            None => return json_error("Invalid format"),
         },
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Missing format")}))).into_response(),
+        None => return json_error("Missing format"),
     };
     let location = match params.get("location") {
         Some(location) => location.to_owned(),
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Missing location")}))).into_response(),
+        None => return json_error("Missing location"),
     };
     let _list = match AppState::get_list(&state,list_id).await {
         Some(list) => list,
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{list_id} perhaps?")}))).into_response(),
+        None => return json_error_gone(&format!("Error retrieving list; No list #{list_id} perhaps?")),
     };
 
     let mut ds = DataSource {
@@ -165,7 +167,7 @@ async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<D
     };
     match ds.create(&state).await {
         Some(_) => {},
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Could not create data source")}))).into_response(),
+        None => return json_error("Could not create data source"),
     }
     let j = json!({"status":"OK","data":ds});
     (StatusCode::OK, Json(j)).into_response()
@@ -174,7 +176,7 @@ async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<D
 async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>) -> Response {
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
+        None => return json_error_gone(&format!("Error retrieving list; No list #{id} perhaps?")),
     };
     let mut list = list.lock().await;
     let old_revision_id = list.revision_id;
@@ -200,6 +202,10 @@ async fn header_schemas(State(state): State<Arc<AppState>>,) -> Response {
 
 fn json_error(s: &str) -> Response {
     (StatusCode::OK ,Json(json!({"status":s}))).into_response()
+}
+
+fn json_error_gone(s: &str) -> Response {
+    (StatusCode::GONE ,Json(json!({"status":s}))).into_response()
 }
 
 async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
@@ -274,7 +280,7 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
     let len: Option<u64> = params.get("len").map(|s|s.parse::<u64>().unwrap_or(u64::MAX));
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
-        None => return (StatusCode::GONE ,Json(json!({"status":format!("Error retrieving list; No list #{id} perhaps?")}))).into_response(),
+        None => return json_error_gone(&format!("Error retrieving list; No list #{id} perhaps?")),
     };
     let list = list.lock().await;
     let revision_id: DbId = params.get("revision_id").map(|s|s.parse::<DbId>().unwrap_or(list.revision_id)).unwrap_or(list.revision_id);
@@ -346,7 +352,6 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GulpError> {
         .route("/header/schemas", get(header_schemas))
         .route("/header/schema/new", get(new_header_schema))
         
-
         .route("/source/update/:source_id", get(source_update))
         .route("/source/header/:source_id", get(source_header))
         .route("/source/create/:list_id", get(source_create))

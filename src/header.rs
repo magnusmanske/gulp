@@ -1,7 +1,7 @@
 use futures::future::join_all;
 use mysql_async::{prelude::*, Conn};
 use regex::Regex;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use serde::Serialize;
 use serde_json::json;
 
@@ -54,7 +54,7 @@ impl HeaderColumn {
         })
     }
 
-    pub async fn guess(&self, cells: Vec<Cell>, _app: &Arc<AppState>) -> HeaderColumn {
+    pub async fn guess(&self, cells: Vec<Cell>) -> HeaderColumn {
         if self.column_type!=ColumnType::String || self.wiki.is_some() || self.string.is_some() || self.namespace_id.is_some() {
             return self.to_owned();
         }

@@ -283,16 +283,18 @@ impl DataSource {
         lh.get_cells(&line_set)
     }
 
-    pub async fn guess_headers(&self, limit: Option<usize>, app: &Arc<AppState>) -> Result<Vec<HeaderColumn>,GulpError> {
+    pub async fn guess_headers(&self, limit: Option<usize>) -> Result<CellSet,GulpError> {
         let line_set = self.get_lines(limit).await?;
-        let lh = self.source_format.line_converter();
-        let cell_set = lh.get_cells(&line_set)?;
-        let mut new_headers = vec![];
-        for (column,header) in cell_set.headers.iter().enumerate() {
-            let cells = cell_set.get_cells_in_column(column);
-            new_headers.push(header.guess(cells, app).await);
-        }
-        Ok(new_headers)
+        let mut cell_set = self.source_format.line_converter().get_cells(&line_set)?;
+        let headers = cell_set.headers.to_owned();
+        let futures: Vec<_> = headers
+            .iter()
+            .enumerate()
+            .map(|(column,header)|(cell_set.get_cells_in_column(column),header))
+            .map(|(cells,header)|header.guess(cells))
+            .collect();
+        cell_set.headers = futures::future::join_all(futures).await;
+        Ok(cell_set)
     }
 
 
