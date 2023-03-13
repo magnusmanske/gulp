@@ -94,7 +94,10 @@
 				<input type="text" v-model="source_url" style="width:100%" tt_placeholder="url" />
 			</div>
 			<div v-else-if="source_type=='FILE'">
-				FILE TODO
+				<form>
+					<input type="file" id="filename" name="filename" />
+					<input type="submit" @click.prevent="upload_file" />
+				</form>
 			</div>
 			<div v-else-if="source_type=='PAGEPILE'">
 				<input type="text" v-model="source_url" style="width:10rem;" tt_placeholder="pagepile_id" />
@@ -180,6 +183,31 @@ let UpdatePage = Vue.extend ( {
 	                })
 			} else {
 				alert("Not implemented");				
+			}
+		},
+		upload_file(ev) {
+			var fd = new FormData();
+        	var files = $('#filename')[0].files;
+			if(files.length > 0 ){
+            fd.append('file',files[0]);
+
+            $.ajax({
+                url: '/upload',
+                type: 'post',
+                data: fd,
+                contentType: false,
+                processData: false,
+                success: function(response){
+                    if(response != 0){
+                         $("#img").attr("src",response); 
+                         $(".preview img").show(); // Display image element
+                    }else{
+                         alert('file not uploaded');
+                    }
+                },
+            });
+			}else{
+				alert("Please select a file.");
 			}
 		},
 	} ,
