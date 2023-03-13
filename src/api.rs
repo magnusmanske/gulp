@@ -289,25 +289,30 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
         Err(e) => return json_error(&e.to_string()),
     };
     
-    match format.as_str() {
-        "csv" => {
+    let format = match DataSourceFormat::new(&format) {
+        Some(format) => format,
+        None => return json_error(&format!("Unsupported format: '{format}'")),
+    };
+    match format {
+        DataSourceFormat::CSV => {
             let s = match rows_as_csv(&list,&rows) {
                 Ok(s) => s,
                 Err(e) => return json_error(&e.to_string()),
             };
             (StatusCode::OK, s).into_response()
         }
-        "tsv" => {
+        DataSourceFormat::TSV => {
             // TODO header
             let rows: Vec<String> = rows.iter().map(|row|row.as_tsv(&list.header)).collect();
             let s = rows.join("\n");
             (StatusCode::OK, s).into_response()
         }
-        _ => { // default format: json
+        DataSourceFormat::JSONL => { // default format: json
             let rows: Vec<serde_json::Value> = rows.iter().map(|row|row.as_json(&list.header)).collect();
             let j = json!({"status":"OK","rows":rows}); // TODO header
             (StatusCode::OK, Json(j)).into_response()
         }
+        DataSourceFormat::PAGEPILE => json_error(&format!("ERROR: Pagepile in API:list_rows")),
     }
 }
 
