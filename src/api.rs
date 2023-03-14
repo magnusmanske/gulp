@@ -1,9 +1,12 @@
 use crate::app_state::AppState;
 use crate::data_source::{DataSource, DataSourceFormat, DataSourceType};
+use crate::file::File;
 use crate::list::List;
 use crate::oauth::*;
 use crate::header::DbId;
-use csv::WriterBuilder;use serde_json::json;
+use crate::user::User;
+use csv::WriterBuilder;
+use serde_json::json;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -12,7 +15,6 @@ use tracing_subscriber;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use axum_extra::routing::SpaRouter;
-use async_session::SessionStore;
 use axum::{
     routing::{get, post},
     Json, 
@@ -26,23 +28,13 @@ use crate::GulpError;
 
 const MAX_UPLOAD_MB: usize = 50;
 
-async fn get_user(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<serde_json::Value> {
-    let cookie = cookies.to_owned()?.get(COOKIE_NAME)?.to_string();
-    let session = state.store.load_session(cookie).await.ok()??;
-    let j = json!(session).get("data").cloned()?.get("user")?.to_owned();
-    serde_json::from_str(j.as_str()?).ok()
-}
-
-async fn get_user_id(state: &Arc<AppState>,cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<DbId> {
-    let user = get_user(&state,&cookies).await?;
-    state.get_or_create_wiki_user_id(user.get("username")?.as_str()?).await
-}
-
 async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let mut j = json!({"user":get_user(&state,&cookies).await});
-    if !j["user"].is_null() {
-        j["user"]["id"] = json!(get_user_id(&state,&cookies).await);
-    }
+    let user = User::from_cookies(&state, &cookies).await;
+    let j = json!({"status":"OK","user":user});
+    // let mut j = json!({"user":get_user(&state,&cookies).await});
+    // if !j["user"].is_null() {
+    //     j["user"]["id"] = json!(get_user_id(&state,&cookies).await);
+    // }
     (StatusCode::OK, Json(j)).into_response()
 }
 
@@ -107,9 +99,9 @@ async fn source_header(State(state): State<Arc<AppState>>, Path(source_id): Path
 }
 
 async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path<DbId>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let user_id = match get_user_id(&state,&cookies).await {
-        Some(user_id) => user_id,
-        None => return (StatusCode::OK, Json(json!({"status":"Could not get a user ID"}))).into_response()
+    let user_id = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user.id,
+        None => return json_error("Could not get a user ID"),
     };
     let source = match DataSource::from_db(&state, source_id).await {
         Some(source) => source,
@@ -130,9 +122,9 @@ async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path
 }
 
 async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<DbId>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let user_id = match get_user_id(&state,&cookies).await {
-        Some(user_id) => user_id,
-        None => return (StatusCode::OK, Json(json!({"status":"Could not get a user ID"}))).into_response()
+    let user_id = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user.id,
+        None => return json_error("Could not get a user ID"),
     };
     let ds_type = match params.get("type").map(|s|DataSourceType::new(s)) {
         Some(ds_format) => match ds_format {
@@ -209,9 +201,9 @@ fn json_error_gone(s: &str) -> Response {
 }
 
 async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let user_id = match get_user_id(&state,&cookies).await {
-        Some(user_id) => user_id,
-        None => return json_error("You need to be logged in")
+    let user_id = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user.id,
+        None => return json_error("Could not get a user ID"),
     };
     let name = match params.get("name") {
         Some(name) => name.to_owned(),
@@ -236,9 +228,9 @@ async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashM
 }
 
 async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let _user_id = match get_user_id(&state,&cookies).await {
-        Some(user_id) => user_id,
-        None => return json_error("You need to be logged in")
+    let _user_id = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user.id,
+        None => return json_error("Could not get a user ID"),
     };
     let name = match params.get("name") {
         Some(name) => name.to_owned(),
@@ -317,22 +309,36 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
 }
 
 async fn my_lists(State(state): State<Arc<AppState>>, Path(rights): Path<String>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let user_id = match get_user_id(&state,&cookies).await {
-        Some(user_id) => user_id,
-        None => return (StatusCode::OK, Json(json!({"status":"Could not get a user ID"}))).into_response()
+    let user_id = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user.id,
+        None => return json_error("Could not get a user ID"),
     };
     let res = state.get_lists_by_user_rights(user_id,&rights).await.unwrap_or(vec![]);
     let j = json!({"status":"OK","lists":res});
     (StatusCode::OK, Json(j)).into_response()
 }
 
-async fn upload(mut multipart: Multipart) {
+async fn upload(State(state): State<Arc<AppState>>, cookies: Option<TypedHeader<headers::Cookie>>, mut multipart: Multipart) -> Response {
+    let user_id = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user.id,
+        None => return json_error("Could not get a user ID"),
+    };
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
         let data = field.bytes().await.unwrap();
 
-        println!("Length of `{}` is {} bytes", name, data.len());
+        if !data.is_empty() {
+            println!("Length of `{}` is {} bytes", name, data.len());
+            let filename = name.to_string(); // TODO FIXME
+            let _file = match File::create_new(&state, &filename, user_id).await {
+                Some(file) => file,
+                None => return json_error("Could not create file in database"),
+            };
+            let j = json!({"status":"OK"});//,"source_id":source_id,"size":data.len()});
+            return (StatusCode::OK, Json(j)).into_response();
+        }
     }
+    json_error("No file uploaded")
 }
 
 

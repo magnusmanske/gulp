@@ -22,7 +22,7 @@ pub static COOKIE_NAME: &str = "SESSION";
 
 // The user data we'll get back from WMF.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct User {
+pub struct OAuthUser {
     pub username: String,
     realname: String,
     email: String,
@@ -87,8 +87,8 @@ pub async fn login_authorized(
         .await
         .unwrap();
 
-    let user_data: User = user_data
-        .json::<User>()
+    let user_data: OAuthUser = user_data
+        .json::<OAuthUser>()
         .await
         .unwrap();
 
@@ -118,7 +118,7 @@ impl IntoResponse for AuthRedirect {
 }
 
 #[async_trait]
-impl<S> FromRequestParts<S> for User
+impl<S> FromRequestParts<S> for OAuthUser
 where
     MemoryStore: FromRef<S>,
     S: Send + Sync,
@@ -147,7 +147,7 @@ where
             .unwrap()
             .ok_or(AuthRedirect)?;
 
-        let user = session.get::<User>("user").ok_or(AuthRedirect)?;
+        let user = session.get::<OAuthUser>("user").ok_or(AuthRedirect)?;
 
         Ok(user)
     }

@@ -18,6 +18,8 @@ pub mod header;
 pub mod cell;
 pub mod row;
 pub mod list;
+pub mod file;
+pub mod user;
 
 
 #[derive(Parser)]

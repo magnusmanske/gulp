@@ -25,10 +25,11 @@ pub struct AppState {
     pub store: DatabaseSessionStore,
     pub oauth_client: BasicClient,
     pub webserver_port: u16,
+    pub fixed_user_id: Option<DbId>, // for local testing only
 }
 
 impl AppState {
-    /// Create an AppState object from a config JSION file
+    /// Create an AppState object from a config JSON file
     pub fn from_config_file(filename: &str) -> Result<Self,GulpError> {
         let mut path = env::current_dir().expect("Can't get CWD");
         path.push(filename);
@@ -66,6 +67,7 @@ impl AppState {
             store: DatabaseSessionStore{pool: Some(gulp_pool.clone())}, //MemoryStore::new(),//
             oauth_client,
             webserver_port: config["webserver"]["port"].as_u64().unwrap_or(8000) as u16,
+            fixed_user_id: config["fixed_user_id"].as_u64(), // for local testing only
         };
         ret
     }
@@ -100,24 +102,6 @@ impl AppState {
             tokio::runtime::Runtime::new().unwrap().block_on(async { wikibase::mediawiki::api::Api::new(&api_url).await } )
         }).join().expect("Thread panicked")?;
         Ok(api)
-    }
-
-    async fn get_wiki_user_id(&self, username: &str) -> Option<DbId> {
-        let sql = "SELECT id FROM `user` WHERE `name`=:username AND is_wiki_user=1" ;
-        self.get_gulp_conn().await.ok()?
-            .exec_iter(sql,params! {username}).await.ok()?
-            .map_and_drop(|row| mysql_async::from_row::<DbId>(row)).await.unwrap().get(0).cloned()
-    }
-    
-    pub async fn get_or_create_wiki_user_id(&self, username: &str) -> Option<DbId> {
-        let res = self.get_wiki_user_id(username).await;
-        if res.is_some() {
-            return res;
-        }
-        let sql = "INSERT IGNORE INTO `user` (`name`,`is_wiki_user`) VALUES (:username,1)" ;
-        self.get_gulp_conn().await.ok()?.exec_drop(sql, params!{username}).await.ok()?;
-        let res = self.get_wiki_user_id(username).await;
-        res
     }
 
     pub async fn get_lists_by_user_rights(&self, user_id: DbId, rights: &str) -> Option<Vec<Value>> {
