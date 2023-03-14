@@ -16,7 +16,7 @@ pub struct User {
 impl User {
     pub async fn create_new(app: &Arc<AppState>, name: &str, is_wiki_user: bool) -> Option<Self> {
         let mut conn = app.get_gulp_conn().await.ok()?;
-        let sql = "INSERT INTO `file` (`name`,`is_wiki_user`) VALUES (:name,:is_wiki_user)" ;
+        let sql = "INSERT INTO `user` (`name`,`is_wiki_user`) VALUES (:name,:is_wiki_user)" ;
         conn.exec_drop(sql, params!{name, is_wiki_user}).await.ok()?;
         let user_id = conn.last_insert_id()?;
         drop(conn);
@@ -43,9 +43,14 @@ impl User {
     
 
     pub async fn from_cookies(app: &Arc<AppState>, cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<Self> {
-        let username = Self::get_user_name_from_cookies(app, cookies).await?;
-        let user_id = Self::get_or_create_wiki_user_id(&app, &username).await?;
-        Self::from_id(app, user_id).await
+        match app.fixed_user_id {
+            Some(user_id) => Self::from_id(app, user_id).await,
+            None => {
+                let username = Self::get_user_name_from_cookies(app, cookies).await?;
+                let user_id = Self::get_or_create_wiki_user_id(&app, &username).await?;
+                Self::from_id(app, user_id).await
+            }
+        }
     }
 
     async fn get_user_name_from_cookies(app: &Arc<AppState>, cookies: &Option<TypedHeader<headers::Cookie>>) -> Option<String> {
@@ -57,7 +62,7 @@ impl User {
     }
 
     pub async fn from_id(app: &Arc<AppState>, user_id: DbId) -> Option<Self> {
-        let sql = r#"SELECT id,name,is_wiki_user FROM `file` WHERE id=:user_id"#;
+        let sql = r#"SELECT id,name,is_wiki_user FROM `user` WHERE id=:user_id"#;
         let row = app.get_gulp_conn().await.ok()?
             .exec_iter(sql,params! {user_id}).await.ok()?
             .map_and_drop(|row| row).await.ok()?

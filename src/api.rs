@@ -29,12 +29,7 @@ use crate::GulpError;
 const MAX_UPLOAD_MB: usize = 50;
 
 async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let user = User::from_cookies(&state, &cookies).await;
-    let j = json!({"status":"OK","user":user});
-    // let mut j = json!({"user":get_user(&state,&cookies).await});
-    // if !j["user"].is_null() {
-    //     j["user"]["id"] = json!(get_user_id(&state,&cookies).await);
-    // }
+    let j = json!({"status":"OK","user":User::from_cookies(&state, &cookies).await});
     (StatusCode::OK, Json(j)).into_response()
 }
 

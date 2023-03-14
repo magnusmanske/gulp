@@ -59,7 +59,7 @@ function set_user_data(d) {
         $("#login_logout").html("<span tt='login'></span>").attr("href","/auth/login");
     } else {
         user.is_logged_in = true;
-        $("#user_greeting").html("<a class='btn btn-outline-default' href='#/user/"+user.id+"'>"+user.username+"</a>");
+        $("#user_greeting").html("<a class='btn btn-outline-default' href='#/user/"+user.id+"'>"+user.name+"</a>");
         $("#login_logout").html("<span tt='logout'></span>").attr("href","/auth/logout");
     }
 }
