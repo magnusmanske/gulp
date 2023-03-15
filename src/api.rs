@@ -286,7 +286,7 @@ fn rows_as_xsv(list: &List, rows: &Vec<crate::row::Row>, delimiter: u8) -> Resul
 }
 
 async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
-    let format: String = params.get("format").unwrap_or(&"json".into()).into();
+    let format: String = params.get("format").unwrap_or(&"jsonl".into()).into();
     let start: u64 = params.get("start").map(|s|s.parse::<u64>().unwrap_or(0)).unwrap_or(0);
     let len: Option<u64> = params.get("len").map(|s|s.parse::<u64>().unwrap_or(u64::MAX));
     let list = match AppState::get_list(&state,id).await {
@@ -300,11 +300,6 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
         Err(e) => return json_error(&e.to_string()),
     };
 
-    if format=="json" {
-        let j = json!({"status":"OK","rows":rows});
-        return (StatusCode::OK, Json(j)).into_response();
-    }
-    
     let format = match DataSourceFormat::new(&format) {
         Some(format) => format,
         None => return json_error(&format!("Unsupported format: '{format}'")),
@@ -329,7 +324,7 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
             let j = json!({"status":"OK","rows":rows}); // TODO header
             (StatusCode::OK, Json(j)).into_response()
         }
-        DataSourceFormat::PAGEPILE => json_error(&format!("ERROR: Pagepile in API:list_rows")),
+        DataSourceFormat::PAGEPILE => json_error(&format!("ERROR: Pagepile format output is not supported")),
     }
 }
 

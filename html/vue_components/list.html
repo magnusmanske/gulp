@@ -5,16 +5,16 @@
         <div class='row'>
             <batch-navigator :batch_size='len' :total='list.total' :current='start/len' :batch_size_options='[25,50,100]' @set-current='move_to(len*$event)' @set-size='set_len($event)'></batch-navigator>
         </div>
-		<table v-if='rows.length>0' class="table">
+		<table v-if="rows.length>0" class="table">
             <tr>
                 <th v-for='column in columns'>{{column.label}}</th>
-                <th tt='user'></th>
+                <th v-if="show_user" tt='user'></th>
             </tr>
             <tr v-for="row in rows" :key="row.row">
                 <td v-for="cell,idx in row.c">
                     <cell :value='cell' :header='columns[idx]'></cell>
                 </td>
-                <td>
+                <td v-if="show_user">
                     <router-link :to="'/user/'+row.user">{{list.users[row.user]}}</router-link>
                 </td>
             </tr>
@@ -33,7 +33,7 @@
 
 Vue.component ( 'list' , {
     props : ['list','revision_id'] ,
-    data : function () { return { start:0, len:25 , rows:[] , columns:[] , loading:true } } , //  list:{},
+    data : function () { return { start:0, len:25 , rows:[] , columns:[] , loading:true , show_user:false } } , //  list:{},
     created : function () {
         // TODO pre-cache wikidata items
         this.columns = this.list.list.header.schema.columns; // To make access easier
