@@ -9,6 +9,7 @@ use crate::user::User;
 use std::io::prelude::*;
 use csv::WriterBuilder;
 use serde_json::json;
+use tower_http::services::ServeDir;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -16,7 +17,6 @@ use tracing;
 use tracing_subscriber;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
-use axum_extra::routing::SpaRouter;
 use axum::{
     routing::{get, post},
     Json, 
@@ -398,7 +398,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GulpError> {
 
         .route("/upload", post(upload))
 
-        .merge(SpaRouter::new("/", "html").index_file("index.html"))
+        .nest_service("/", ServeDir::new("html"))
         .with_state(shared_state.clone())
         .layer(DefaultBodyLimit::max(1024*1024*MAX_UPLOAD_MB))
         .layer(TraceLayer::new_for_http())
