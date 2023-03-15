@@ -3,7 +3,6 @@ var app ;
 let wd = new WikiData() ;
 var user = { is_logged_in:false } ;
 
-
 var ns_cache = {
     cache: {},
     loading: {},
@@ -72,6 +71,7 @@ $(document).ready(function(){
                 'vue_components/main_page.html',
                 'vue_components/list_page.html',
                 'vue_components/update_page.html',
+                'vue_components/upload_page.html',
                 'vue_components/create_list_page.html',
                 'vue_components/create_header_page.html',
                 'vue_components/list.html',
@@ -94,6 +94,7 @@ $(document).ready(function(){
           { path: '/list/:list_id', component: ListPage , props:true },
           { path: '/list/:list_id/:initial_revision_id', component: ListPage , props:true },
           { path: '/update/:list_or_new', component: UpdatePage , props:true },
+          { path: '/upload/', component: UploadPage , props:true },
           { path: '/create/list', component: CreateListPage , props:true },
           { path: '/create/header', component: CreateHeaderPage , props:true },
 /*
