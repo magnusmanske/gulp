@@ -1,6 +1,7 @@
 use crate::app_state::AppState;
 use crate::data_source::{DataSource, DataSourceFormat, DataSourceType};
 use crate::file::File;
+use crate::gulp_response::ContentType;
 use crate::list::List;
 use crate::oauth::*;
 use crate::header::DbId;
@@ -55,6 +56,7 @@ async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
         "users":users_in_revision,
         "total":numer_of_rows,
         "revision_id":revision_id,
+        "file_basename":list.get_file_basename(Some(revision_id)),
     });
     (StatusCode::OK, Json(j)).into_response()
 }
@@ -114,7 +116,7 @@ async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path
     let x = list.update_from_source(&source, user.id).await;
     match x {
         Ok(_) => {}
-        Err(e) => return json_error_code(StatusCode::INTERNAL_SERVER_ERROR , &format!("Error updating from source: {e}")),
+        Err(e) => return json_error(&format!("Error updating from source: {e}")),
     }
     let j = json!({"status":"OK"});
     (StatusCode::OK, Json(j)).into_response()
@@ -285,13 +287,13 @@ fn rows_as_xsv(list: &List, rows: &Vec<crate::row::Row>, delimiter: u8) -> Resul
     Ok(ret)
 }
 
-async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
-    let format: String = params.get("format").unwrap_or(&"jsonl".into()).into();
+async fn list_rows(State(state): State<Arc<AppState>>, Path(list_id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
+    let format: String = params.get("format").unwrap_or(&"json".into()).into();
     let start: u64 = params.get("start").map(|s|s.parse::<u64>().unwrap_or(0)).unwrap_or(0);
     let len: Option<u64> = params.get("len").map(|s|s.parse::<u64>().unwrap_or(u64::MAX));
-    let list = match AppState::get_list(&state,id).await {
+    let list = match AppState::get_list(&state,list_id).await {
         Some(list) => list,
-        None => return json_error_gone(&format!("Error retrieving list; No list #{id} perhaps?")),
+        None => return json_error_gone(&format!("Error retrieving list; No list #{list_id} perhaps?")),
     };
     let list = list.lock().await;
     let revision_id: DbId = params.get("revision_id").map(|s|s.parse::<DbId>().unwrap_or(list.revision_id)).unwrap_or(list.revision_id);
@@ -300,31 +302,33 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
         Err(e) => return json_error(&e.to_string()),
     };
 
-    let format = match DataSourceFormat::new(&format) {
+    let format = match ContentType::new(&format) {
         Some(format) => format,
         None => return json_error(&format!("Unsupported format: '{format}'")),
     };
+
+    let filename = format!("{}.{}",list.get_file_basename(Some(revision_id)),format.file_ending());
     match format {
-        DataSourceFormat::CSV => {
+        ContentType::CSV => {
             let s = match rows_as_xsv(&list,&rows,b',') {
                 Ok(s) => s,
                 Err(e) => return json_error(&e.to_string()),
             };
-            (StatusCode::OK, s).into_response()
+            (format.download_headers(Some(filename)), s).into_response()
         }
-        DataSourceFormat::TSV => {
+        ContentType::TSV => {
             let s = match rows_as_xsv(&list,&rows,b'\t') {
                 Ok(s) => s,
                 Err(e) => return json_error(&e.to_string()),
             };
-            (StatusCode::OK, s).into_response()
+            (format.download_headers(Some(filename)), s).into_response()
         }
-        DataSourceFormat::JSONL => { // default format: json
+        ContentType::JSON => { // default format: json
             let rows: Vec<serde_json::Value> = rows.iter().map(|row|row.as_json(&list.header)).collect();
             let j = json!({"status":"OK","rows":rows}); // TODO header
-            (StatusCode::OK, Json(j)).into_response()
+            (format.download_headers(Some(filename)), Json(j)).into_response()
         }
-        DataSourceFormat::PAGEPILE => json_error(&format!("ERROR: Pagepile format output is not supported")),
+        other => return json_error(&format!("ERROR: Output format '{}' is not supported",other.as_str())),
     }
 }
 

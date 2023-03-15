@@ -69,6 +69,15 @@ impl List {
         })
     }
 
+    pub fn get_file_basename(&self, revision_id: Option<DbId>) -> String {
+        let revision_id = revision_id.unwrap_or(self.revision_id);
+        if self.name.is_empty() {
+            format!("GULP_list_{}.revision_{}",self.id,revision_id)
+        } else {
+            format!("{}.revision_{}",self.name.replace(" ","_"),revision_id)
+        }
+    }
+
     pub async fn get_rows_for_revision(&self, revision_id: DbId) -> Result<Vec<Row>, GulpError> {
         self.get_rows_for_revision_paginated(revision_id, 0, None).await
     }

@@ -20,14 +20,14 @@ ul.list-top li {
 				</li>
 				<li style="padding-top:0.4rem;" tt='total_rows' :tt1='list.total'></li>
 				<li>
-					<select v-model="download_type" class="form-control" style="display: inline-block; width: auto;" @change="set_download_url">
-						<option value='csv' tt='csv'></option>
-						<option value='tsv' tt='tsv'></option>
-						<option value='json' tt='json'></option>
-					</select>
-					<a :href="download_url" tt_title="download" :download="'gulp.list.'+list.list.id+'.'+list.revision_id+'.'+download_type">
-						<img :src="download_icon_url"/>
-					</a>
+					<div class="dropdown">
+						<button class="btn btn-outline-secondary dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="false" tt="download"></button>
+						<div class="dropdown-menu">
+						  <a class="dropdown-item" :href="getDownloadUrl('csv')" :download="getFilename('csv')" tt="csv"></a>
+						  <a class="dropdown-item" :href="getDownloadUrl('tsv')" :download="getFilename('tsv')" tt="tsv"></a>
+						  <a class="dropdown-item" :href="getDownloadUrl('json')" :download="getFilename('json')" tt="json"></a>
+						</div>
+					  </div>
 				</li>
 				<li style="padding-top:0.4rem; margin-left:3rem;">
 					<button class="btn btn-outline-secondary" href="#" @click.prevent="snapshot" tt='snapshot' style="margin-top: -0.4rem;"></button>
@@ -48,13 +48,10 @@ ul.list-top li {
 
 let ListPage = Vue.extend ( {
     props : ['list_id','initial_revision_id'] ,
-    data : function () { return { list:{} , revision_id:0 , revisions:[] , download_type:'tsv' , download_url:'' , loading:true ,
-    	download_icon_url:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Cloud_Download_-_The_Noun_Project.svg/32px-Cloud_Download_-_The_Noun_Project.svg.png'
-	} } ,
+    data : function () { return { list:{} , revision_id:0 , revisions:[] , loading:true } } ,
     created : function () {
     	this.load_list(()=>{
     	    this.fix_columns();
-    	    this.set_download_url();
     		this.loading=false
     	})
     },
@@ -70,11 +67,14 @@ let ListPage = Vue.extend ( {
 	    		this.$router.push ("/list/"+this.list.list.id+"/"+this.revision_id);
     		}
     	} ,
-    	set_download_url() {
-    		let url = "//gulp.toolforge.org/list/rows/"+this.list.list.id+"?format="+this.download_type ;
+		getDownloadUrl(filetype) {
+    		let url = "/list/rows/"+this.list.list.id+"?format="+filetype ;
     		if ( this.revision_id!=this.list.list.revision_id ) url += "&revision_id="+this.revision_id;
-    		this.download_url = url;
-    	} ,
+    		return url;
+		} ,
+		getFilename(filetype) {
+			return this.list.file_basename+'.'+filetype;
+		},
     	snapshot() {
     		let url = "/list/snapshot/"+this.list.list.id;
             fetch(url)
