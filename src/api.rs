@@ -5,6 +5,7 @@ use crate::list::List;
 use crate::oauth::*;
 use crate::header::DbId;
 use crate::user::User;
+use std::io::prelude::*;
 use csv::WriterBuilder;
 use serde_json::json;
 use std::collections::HashMap;
@@ -66,12 +67,12 @@ async fn list_sources(State(state): State<Arc<AppState>>, Path(id): Path<DbId>,)
     let list = list.lock().await;
     let sources = match list.get_sources().await {
         Ok(sources) => sources,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error retrieving list sources: {}",e.to_string())}))).into_response(),
+        Err(e) => return json_error(&format!("Error retrieving list sources: {e}")),
     };
     let user_ids = sources.iter().map(|s|s.user_id).collect();
     let users = match list.get_users_by_id(&user_ids).await {
         Ok(users) => users,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error retrieving user details: {}",e.to_string())}))).into_response(),
+        Err(e) => return json_error(&format!("Error retrieving user details: {e}")),
     };
     let j = json!({"status":"OK","sources":sources,"users":users});
     (StatusCode::OK, Json(j)).into_response()
@@ -94,10 +95,6 @@ async fn source_header(State(state): State<Arc<AppState>>, Path(source_id): Path
 }
 
 async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path<DbId>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let user_id = match User::from_cookies(&state, &cookies).await {
-        Some(user) => user.id,
-        None => return json_error("Could not get a user ID"),
-    };
     let source = match DataSource::from_db(&state, source_id).await {
         Some(source) => source,
         None => return json_error_gone(&format!("Error retrieving source; No source #{source_id} perhaps?")),
@@ -107,20 +104,30 @@ async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path
         None => return json_error_gone(&format!("Error retrieving list; No list #{} perhaps?",source.list_id)),
     };
     let list = list.lock().await;
-    let x = list.update_from_source(&source, user_id).await;
+    let user = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user,
+        None => return json_error("Not logged in"),
+    };
+    if !user.can_update_from_source(list.id).await {
+        return json_error("You are nor allowed to create a new data source for this list. Please ask the list admin(s) for permission.");
+    }
+    let x = list.update_from_source(&source, user.id).await;
     match x {
         Ok(_) => {}
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error updating from source: {}",e.to_string())}))).into_response(),
+        Err(e) => return json_error_code(StatusCode::INTERNAL_SERVER_ERROR , &format!("Error updating from source: {e}")),
     }
     let j = json!({"status":"OK"});
     (StatusCode::OK, Json(j)).into_response()
 }
 
 async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<DbId>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let user_id = match User::from_cookies(&state, &cookies).await {
-        Some(user) => user.id,
-        None => return json_error("Could not get a user ID"),
+    let user = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user,
+        None => return json_error("Not logged in"),
     };
+    if !user.can_create_new_data_source(list_id).await {
+        return json_error("You are nor allowed to create a new data source for this list. Please ask the list admin(s) for permission.");
+    }
     let ds_type = match params.get("type").map(|s|DataSourceType::new(s)) {
         Some(ds_format) => match ds_format {
             Some(ds_format) => ds_format,
@@ -135,14 +142,24 @@ async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<D
         },
         None => return json_error("Missing format"),
     };
-    let location = match params.get("location") {
+    let mut location = match params.get("location") {
         Some(location) => location.to_owned(),
         None => return json_error("Missing location"),
-    };
-    let _list = match AppState::get_list(&state,list_id).await {
-        Some(list) => list,
-        None => return json_error_gone(&format!("Error retrieving list; No list #{list_id} perhaps?")),
-    };
+    };        
+    match ds_type { // location contains file ID, NOT the file path. This we need to get from the database; otherwise, the user could ask for any file on disk...
+        DataSourceType::FILE => {
+            let file_id = match location.parse::<DbId>() {
+                Ok(file_id) => file_id,
+                Err(_) => return json_error("Locations needs to be file ID"),
+            };
+            let file = match File::from_id(&state,file_id).await {
+                Some(file) => file,
+                None => return json_error(&format!("No file ID {file_id} in database")),
+            };
+            location = file.path.to_string();
+        },
+        _ => {}
+    }
 
     let mut ds = DataSource {
         id: 0,
@@ -150,26 +167,32 @@ async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<D
         source_type: ds_type,
         source_format: ds_format,
         location,
-        user_id,
+        user_id: user.id,
     };
-    match ds.create(&state).await {
-        Some(_) => {},
-        None => return json_error("Could not create data source"),
+    if let None = ds.create(&state).await {
+        return json_error("Could not create data source")
     }
     let j = json!({"status":"OK","data":ds});
     (StatusCode::OK, Json(j)).into_response()
 }
 
-async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>) -> Response {
+async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
         None => return json_error_gone(&format!("Error retrieving list; No list #{id} perhaps?")),
     };
     let mut list = list.lock().await;
+    let user = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user,
+        None => return json_error("Not logged in"),
+    };
+    if !user.can_create_snapshot(list.id).await {
+        return json_error("You are nor allowed to create a new data source for this list. Please ask the list admin(s) for permission.");
+    }
     let old_revision_id = list.revision_id;
     let new_revision_id = match list.snapshot().await {
         Ok(rev_id) => rev_id,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":format!("Error creating snapshot: {}",e.to_string())}))).into_response(),
+        Err(e) => return json_error_code(StatusCode::INTERNAL_SERVER_ERROR, &format!("Error creating snapshot: {e}")),
     };
     let j = json!({
         "old_revision_id" : old_revision_id,
@@ -181,24 +204,29 @@ async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>)
 async fn header_schemas(State(state): State<Arc<AppState>>,) -> Response {
     let hs = match state.get_all_header_schemas().await {
         Ok(hs) => hs,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR ,Json(json!({"status":e.to_string()}))).into_response(),
+        Err(e) => return json_error_code(StatusCode::INTERNAL_SERVER_ERROR , &e.to_string()),
     };
     let j = json!({"status":"OK","data":hs});
     (StatusCode::OK, Json(j)).into_response()
 }
 
+fn json_error_code(code:StatusCode, s: &str) -> Response {
+    (code ,Json(json!({"status":s}))).into_response()
+}
+
 fn json_error(s: &str) -> Response {
-    (StatusCode::OK ,Json(json!({"status":s}))).into_response()
+    json_error_code(StatusCode::OK, s)
 }
 
 fn json_error_gone(s: &str) -> Response {
-    (StatusCode::GONE ,Json(json!({"status":s}))).into_response()
+    json_error_code(StatusCode::GONE, s)
 }
+
 
 async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let user_id = match User::from_cookies(&state, &cookies).await {
         Some(user) => user.id,
-        None => return json_error("Could not get a user ID"),
+        None => return json_error("Please log in to create a new list"),
     };
     let name = match params.get("name") {
         Some(name) => name.to_owned(),
@@ -222,11 +250,7 @@ async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashM
     (StatusCode::OK, Json(j)).into_response()
 }
 
-async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
-    let _user_id = match User::from_cookies(&state, &cookies).await {
-        Some(user) => user.id,
-        None => return json_error("Could not get a user ID"),
-    };
+async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>) -> Response {
     let name = match params.get("name") {
         Some(name) => name.to_owned(),
         None => return json_error("A name is required")
@@ -250,9 +274,9 @@ async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Qu
     }
 }
 
-fn rows_as_csv(list: &List, rows: &Vec<crate::row::Row>) -> Result<String,GulpError> {
+fn rows_as_xsv(list: &List, rows: &Vec<crate::row::Row>, delimiter: u8) -> Result<String,GulpError> {
     // TODO header
-    let mut wtr = WriterBuilder::new().from_writer(vec![]);
+    let mut wtr = WriterBuilder::new().delimiter(delimiter).from_writer(vec![]);
     for row in rows {
         wtr.write_record(&row.as_vec(&list.header))?;
     }
@@ -275,6 +299,11 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
         Ok(rows) => rows,
         Err(e) => return json_error(&e.to_string()),
     };
+
+    if format=="json" {
+        let j = json!({"status":"OK","rows":rows});
+        return (StatusCode::OK, Json(j)).into_response();
+    }
     
     let format = match DataSourceFormat::new(&format) {
         Some(format) => format,
@@ -282,16 +311,17 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
     };
     match format {
         DataSourceFormat::CSV => {
-            let s = match rows_as_csv(&list,&rows) {
+            let s = match rows_as_xsv(&list,&rows,b',') {
                 Ok(s) => s,
                 Err(e) => return json_error(&e.to_string()),
             };
             (StatusCode::OK, s).into_response()
         }
         DataSourceFormat::TSV => {
-            // TODO header
-            let rows: Vec<String> = rows.iter().map(|row|row.as_tsv(&list.header)).collect();
-            let s = rows.join("\n");
+            let s = match rows_as_xsv(&list,&rows,b'\t') {
+                Ok(s) => s,
+                Err(e) => return json_error(&e.to_string()),
+            };
             (StatusCode::OK, s).into_response()
         }
         DataSourceFormat::JSONL => { // default format: json
@@ -306,7 +336,7 @@ async fn list_rows(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
 async fn my_lists(State(state): State<Arc<AppState>>, Path(rights): Path<String>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let user_id = match User::from_cookies(&state, &cookies).await {
         Some(user) => user.id,
-        None => return json_error("Could not get a user ID"),
+        None => return json_error("Please log in to see your lists"),
     };
     let res = state.get_lists_by_user_rights(user_id,&rights).await.unwrap_or(vec![]);
     let j = json!({"status":"OK","lists":res});
@@ -316,20 +346,25 @@ async fn my_lists(State(state): State<Arc<AppState>>, Path(rights): Path<String>
 async fn upload(State(state): State<Arc<AppState>>, cookies: Option<TypedHeader<headers::Cookie>>, mut multipart: Multipart) -> Response {
     let user_id = match User::from_cookies(&state, &cookies).await {
         Some(user) => user.id,
-        None => return json_error("Could not get a user ID"),
+        None => return json_error("Please log in to upload files"),
     };
     while let Some(field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
+        let original_filename = field.file_name().unwrap_or("").to_string();
         let data = field.bytes().await.unwrap();
-
         if !data.is_empty() {
-            println!("Length of `{}` is {} bytes", name, data.len());
-            let filename = name.to_string(); // TODO FIXME
-            let _file = match File::create_new(&state, &filename, user_id).await {
+            println!("Length of `{}` is {} bytes", &original_filename, data.len());
+            let filename = state.get_new_filename();
+
+            // Write to disk
+            let mut file_handle = std::fs::File::create(&filename).unwrap();
+            file_handle.write_all(&data).unwrap();
+            drop(file_handle);
+
+            let file = match File::create_new(&state, &filename, user_id, &original_filename).await {
                 Some(file) => file,
                 None => return json_error("Could not create file in database"),
             };
-            let j = json!({"status":"OK"});//,"source_id":source_id,"size":data.len()});
+            let j = json!({"status":"OK","file":file});
             return (StatusCode::OK, Json(j)).into_response();
         }
     }

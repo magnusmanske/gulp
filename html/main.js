@@ -90,11 +90,11 @@ $(document).ready(function(){
 
         const routes = [
           { path: '/', component: MainPage },
+          { path: '/list/new', component: CreateListPage , props:true },
+          { path: '/list/update/:list_or_new', component: UpdatePage , props:true },
           { path: '/list/:list_id', component: ListPage , props:true },
           { path: '/list/:list_id/:initial_revision_id', component: ListPage , props:true },
-          { path: '/update/:list_or_new', component: UpdatePage , props:true },
-          { path: '/create/list', component: CreateListPage , props:true },
-          { path: '/create/header', component: CreateHeaderPage , props:true },
+          { path: '/header/new', component: CreateHeaderPage , props:true },
 /*
           { path: '/group', component: CatalogGroup , props:true },
           { path: '/group/:key', component: CatalogGroup , props:true },

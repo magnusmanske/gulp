@@ -19,7 +19,7 @@ pub struct AppState {
     lists: Arc<RwLock<HashMap<DbId,ListMutex>>>,
     gulp_pool: mysql_async::Pool,
     wikidata_pool: mysql_async::Pool,
-    _import_file_path: String,
+    import_file_path: String,
     pub consumer_token: String,
     pub secret_token: String,
     pub store: DatabaseSessionStore,
@@ -60,8 +60,7 @@ impl AppState {
             lists: Arc::new(RwLock::new(HashMap::new())),
             gulp_pool: gulp_pool.clone(),
             wikidata_pool,
-            // mnm_pool: Self::create_pool(&config["mixnmatch"]),
-            _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
+            import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
             consumer_token: config["consumer_token"].as_str().unwrap().to_string(),
             secret_token: config["secret_token"].as_str().unwrap().to_string(),
             store: DatabaseSessionStore{pool: Some(gulp_pool.clone())}, //MemoryStore::new(),//
@@ -156,14 +155,21 @@ impl AppState {
 
     pub async fn get_all_header_schemas(&self) -> Result<Vec<crate::header::HeaderSchema>,GulpError> {
         let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE id>"#;
-        Ok(self.get_gulp_conn().await.unwrap()
-            .exec_iter(sql,()).await.unwrap()
-            .map_and_drop(|row| crate::header::HeaderSchema::from_row(&row)).await.unwrap()
+        Ok(self.get_gulp_conn().await?
+            .exec_iter(sql,()).await?
+            .map_and_drop(|row| crate::header::HeaderSchema::from_row(&row)).await?
             .iter().filter_map(|s|s.to_owned()).collect())
     }
 
     pub async fn get_url_as_json(url: &str) -> Option<Value> {
         reqwest::get(url).await.ok()?.json::<Value>().await.ok()
+    }
+
+    pub fn get_new_filename(&self) -> String {
+        let mut pathbuf = std::path::PathBuf::from(&self.import_file_path);
+        pathbuf.push(&uuid::Uuid::new_v4().to_string());
+        pathbuf.set_extension("gulp");
+        pathbuf.to_string_lossy().to_string()
     }
 }
 
