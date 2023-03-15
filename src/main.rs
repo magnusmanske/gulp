@@ -1,24 +1,26 @@
 #[macro_use]
 extern crate lazy_static;
 
-// use async_session::SessionStore;
 use clap::{Parser, Subcommand};
 use app_state::AppState;
-use serde_json::json;
+use data_source::DataSource;
 use std::sync::Arc;
 use api::run_server;
+pub use error::GulpError;
 
-pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
-
+pub mod error;
 pub mod api;
 pub mod app_state;
 pub mod oauth;
 pub mod database_session_store;
 pub mod data_source;
+pub mod gulp_response;
 pub mod header;
 pub mod cell;
 pub mod row;
 pub mod list;
+pub mod file;
+pub mod user;
 
 
 #[derive(Parser)]
@@ -37,7 +39,7 @@ enum Commands {
 
 
 #[tokio::main]
-async fn main() -> Result<(), GenericError> {
+async fn main() -> Result<(), GulpError> {
     let cli = Cli::parse();
 
     let app = Arc::new(AppState::from_config_file("config.json").expect("app creation failed"));
@@ -47,6 +49,10 @@ async fn main() -> Result<(), GenericError> {
             run_server(app).await?;
         }
         Some(Commands::Test) => {
+            let ds = DataSource::from_db(&app,6).await.unwrap();
+            let headers = ds.guess_headers(Some(100)).await.unwrap();
+            println!("{headers:?}");
+
             // let session = app.store.load_session("yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw=".to_string()).await;
             // let session = session.unwrap().unwrap();
             // let j = json!(session).get("data").cloned().unwrap();
@@ -57,14 +63,15 @@ async fn main() -> Result<(), GenericError> {
 
             //let cookie = "yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw=".to_string();
             //let session = app.load_session(cookie).await.ok();
-            let j = r#"{"data":{"user":"{\"username\":\"Magnus Manske\",\"realname\":\"\",\"email\":\"magnusmanske@googlemail.com\",\"editcount\":1299,\"confirmed_email\":true,\"blocked\":false,\"groups\":[\"oauthadmin\",\"*\",\"user\",\"autoconfirmed\"],\"rights\":[],\"grants\":[\"mwoauth-authonlyprivate\"]}"},"expiry":null,"id":"yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw="}"#;
-            let j: serde_json::Value = serde_json::from_str(&j).unwrap();
-            let j = json!(j).get("data").cloned().unwrap().get("user").unwrap().to_owned();
-            let j: serde_json::Value = serde_json::from_str(j.as_str().unwrap()).unwrap();
-            println!("{j:?}");
-            let user_name = j.get("username").unwrap().as_str().unwrap();
-            let user_id = app.get_or_create_wiki_user_id(user_name).await.unwrap();
-            println!("{user_id}");
+
+            // let j = r#"{"data":{"user":"{\"username\":\"Magnus Manske\",\"realname\":\"\",\"email\":\"magnusmanske@googlemail.com\",\"editcount\":1299,\"confirmed_email\":true,\"blocked\":false,\"groups\":[\"oauthadmin\",\"*\",\"user\",\"autoconfirmed\"],\"rights\":[],\"grants\":[\"mwoauth-authonlyprivate\"]}"},"expiry":null,"id":"yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw="}"#;
+            // let j: serde_json::Value = serde_json::from_str(&j).unwrap();
+            // let j = json!(j).get("data").cloned().unwrap().get("user").unwrap().to_owned();
+            // let j: serde_json::Value = serde_json::from_str(j.as_str().unwrap()).unwrap();
+            // println!("{j:?}");
+            // let user_name = j.get("username").unwrap().as_str().unwrap();
+            // let user_id = app.get_or_create_wiki_user_id(user_name).await.unwrap();
+            // println!("{user_id}");
         
             /*
             let list = AppState::get_list(&app,4).await.expect("List does not exists");
@@ -93,4 +100,5 @@ async fn main() -> Result<(), GenericError> {
 
 /*
 ssh magnus@tools-login.wmflabs.org -L 3308:tools-db:3306 -N &
+ssh magnus@tools-login.wmflabs.org -L 3309:wikidatawiki.analytics.db.svc.wikimedia.cloud:3306 -N &
 */

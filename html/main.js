@@ -46,8 +46,7 @@ var ns_cache = {
         return wiki.replace(/^(.+)(wik.+)$/,"$1.$2.org");
     },
     prefix_with_namespace(wiki,namespace_id,title) {
-        if ( namespace_id==0 ) return title;
-        return self.cache[wiki].query.namespaces[namespace_id].canonical+":"+title;
+        return this.cache[wiki][namespace_id].canonical+":"+title;
     }
 
 };
@@ -59,7 +58,7 @@ function set_user_data(d) {
         $("#login_logout").html("<span tt='login'></span>").attr("href","/auth/login");
     } else {
         user.is_logged_in = true;
-        $("#user_greeting").html("<a class='btn btn-outline-default' href='#/user/"+user.id+"'>"+user.username+"</a>");
+        $("#user_greeting").html("<a class='btn btn-outline-default' href='#/user/"+user.id+"'>"+user.name+"</a>");
         $("#login_logout").html("<span tt='logout'></span>").attr("href","/auth/logout");
     }
 }
@@ -91,6 +90,8 @@ $(document).ready(function(){
 
         const routes = [
           { path: '/', component: MainPage },
+          { path: '/list/new', component: CreateListPage , props:true },
+          { path: '/list/update/:list_or_new', component: UpdatePage , props:true },
           { path: '/list/:list_id', component: ListPage , props:true },
           { path: '/list/:list_id/:initial_revision_id', component: ListPage , props:true },
           { path: '/update/:list_or_new', component: UpdatePage , props:true },

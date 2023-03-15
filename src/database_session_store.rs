@@ -15,10 +15,10 @@ impl SessionStore for DatabaseSessionStore {
         let sql = "SELECT `json` FROM `session` WHERE `id_string`=:id_string" ;
         let res = self.get_gulp_conn().await
             .exec_iter(sql,params! {id_string}).await?
-            .map_and_drop(|row| mysql_async::from_row::<String>(row)).await.unwrap().get(0).cloned();
+            .map_and_drop(|row| mysql_async::from_row::<String>(row)).await?.get(0).cloned();
         match res {
             Some(json) => {
-                let session: Session = serde_json::from_str(&json).unwrap();
+                let session: Session = serde_json::from_str(&json)?;
                 // TODO Session::validate
                 Ok(Some(session))
             }
@@ -70,10 +70,9 @@ impl DatabaseSessionStore {
 
     /// returns the number of elements in the memory store
     pub async fn count(&self) -> usize {
-        let id = 0;
-        let sql = "SELECT count(*) FROM `session` WHERE id>:id" ;
+        let sql = "SELECT count(*) FROM `session`" ;
         *self.get_gulp_conn().await
-            .exec_iter(sql,params! {id}).await.unwrap()
+            .exec_iter(sql,()).await.unwrap()
             .map_and_drop(|row| mysql_async::from_row::<usize>(row)).await.unwrap().get(0).unwrap()
     }
 }

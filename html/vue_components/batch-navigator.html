@@ -7,9 +7,9 @@ a.batch_link_disabled {
 <template id='batch-navigator-template'>
 <div style='margin-left:auto;margin-right:auto;' v-if='total>batch_size'>
 	<nav style='display:flex'>
-		<ul v-if='batches<20' class="pagination">
+		<ul v-if="isSmall()" class="pagination">
 			<li>
-				<a :class="'page-link'+(current==0?' batch_link_disabled':'')" href="#" @click.prevent='setCurrentBatch(current-1)'>←</a>
+				<a :class="isFirstBatch()" href="#" @click.prevent='setCurrentBatch(current-1)'>←</a>
 			</li>
 			<li v-for='batch in [...Array(batches).keys()]' class="page-item">
 				<a v-if='batch==current' class="page-link disabled" href='#' @click.prevent='setCurrentBatch(batch)' disabled>
@@ -20,10 +20,13 @@ a.batch_link_disabled {
 				</a>
 			</li>
 			<li>
-				<a :class="'page-link'+(current<batches-1?'':' batch_link_disabled')" href="#" @click.prevent='setCurrentBatch(current+1)'>→</a>
+				<a :class="isLastBatch()" href="#" @click.prevent='setCurrentBatch(current+1)'>→</a>
 			</li>
 		</ul>
 		<ul v-else class="pagination">
+			<li>
+				<a :class="isFirstBatch()" href="#" @click.prevent='setCurrentBatch(0)'>↞</a>
+			</li>
 			<li>
 				<a :class="'page-link'+(current==0?' batch_link_disabled':'')" href="#" @click.prevent='setCurrentBatch(current-1)'>←</a>
 			</li>
@@ -33,7 +36,10 @@ a.batch_link_disabled {
 				</select>
 			</li>
 			<li>
-				<a :class="'page-link'+(current<batches-1?'':' batch_link_disabled')" href="#" @click.prevent='setCurrentBatch(current+1)'>→</a>
+				<a :class="isLastBatch()" href="#" @click.prevent='setCurrentBatch(current+1)'>→</a>
+			</li>
+			<li>
+				<a :class="isLastBatch()" href="#" @click.prevent='setCurrentBatch(batches-1)'>↠</a>
 			</li>
 		</ul>
 
@@ -68,7 +74,16 @@ Vue.component ( 'batch-navigator' , {
     		if ( new_batch >= this.batches ) return ; // new_batch == 0 || 
     		if ( this.current == new_batch && !force_update ) return ;
     		this.$emit ( 'set-current' , new_batch ) ;
-    	}
+    	} ,
+		isSmall : function () {
+			return this.batches<20;
+		} ,
+		isFirstBatch : function () {
+			return 'page-link'+(this.current==0?' batch_link_disabled':'');
+		} ,
+		isLastBatch : function () {
+			return 'page-link'+(this.current<this.batches-1?'':' batch_link_disabled');
+		}
     } ,
     template : '#batch-navigator-template'
 } ) ;

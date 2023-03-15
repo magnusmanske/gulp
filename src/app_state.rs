@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use tokio::sync::{Mutex, RwLock};
 use std::sync::Arc;
 use crate::{list::List, header::DbId};
-use crate::GenericError;
+use crate::GulpError;
 use crate::database_session_store::DatabaseSessionStore;
 
 type ListMutex = Arc<Mutex<List>>;
@@ -18,16 +18,19 @@ type ListMutex = Arc<Mutex<List>>;
 pub struct AppState {
     lists: Arc<RwLock<HashMap<DbId,ListMutex>>>,
     gulp_pool: mysql_async::Pool,
-    _import_file_path: String,
+    wikidata_pool: mysql_async::Pool,
+    import_file_path: String,
     pub consumer_token: String,
     pub secret_token: String,
     pub store: DatabaseSessionStore,
     pub oauth_client: BasicClient,
+    pub webserver_port: u16,
+    pub fixed_user_id: Option<DbId>, // for local testing only
 }
 
 impl AppState {
-    /// Create an AppState object from a config JSION file
-    pub fn from_config_file(filename: &str) -> Result<Self,GenericError> {
+    /// Create an AppState object from a config JSON file
+    pub fn from_config_file(filename: &str) -> Result<Self,GulpError> {
         let mut path = env::current_dir().expect("Can't get CWD");
         path.push(filename);
         let file = File::open(&path)?;
@@ -52,15 +55,18 @@ impl AppState {
         .set_redirect_uri(RedirectUrl::new(redirect_url.to_string()).unwrap());
 
         let gulp_pool = Self::create_pool(&config["gulp"]);
+        let wikidata_pool = Self::create_pool(&config["wikidata"]);
         let ret = Self {
             lists: Arc::new(RwLock::new(HashMap::new())),
             gulp_pool: gulp_pool.clone(),
-            // mnm_pool: Self::create_pool(&config["mixnmatch"]),
-            _import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
+            wikidata_pool,
+            import_file_path: config["import_file_path"].as_str().unwrap().to_string(),
             consumer_token: config["consumer_token"].as_str().unwrap().to_string(),
             secret_token: config["secret_token"].as_str().unwrap().to_string(),
             store: DatabaseSessionStore{pool: Some(gulp_pool.clone())}, //MemoryStore::new(),//
             oauth_client,
+            webserver_port: config["webserver"]["port"].as_u64().unwrap_or(8000) as u16,
+            fixed_user_id: config["fixed_user_id"].as_u64(), // for local testing only
         };
         ret
     }
@@ -84,22 +90,17 @@ impl AppState {
         self.gulp_pool.get_conn().await
     }
 
-    async fn get_wiki_user_id(&self, username: &str) -> Option<DbId> {
-        let sql = "SELECT id FROM `user` WHERE `name`=:username AND is_wiki_user=1" ;
-        self.get_gulp_conn().await.ok()?
-            .exec_iter(sql,params! {username}).await.ok()?
-            .map_and_drop(|row| mysql_async::from_row::<DbId>(row)).await.unwrap().get(0).cloned()
+    /// Returns a connection to the wikidata database
+    pub async fn get_wikidata_conn(&self) -> Result<Conn, mysql_async::Error> {
+        self.wikidata_pool.get_conn().await
     }
-    
-    pub async fn get_or_create_wiki_user_id(&self, username: &str) -> Option<DbId> {
-        let res = self.get_wiki_user_id(username).await;
-        if res.is_some() {
-            return res;
-        }
-        let sql = "INSERT IGNORE INTO `user` (`name`,`is_wiki_user`) VALUES (:username,1)" ;
-        self.get_gulp_conn().await.ok()?.exec_drop(sql, params!{username}).await.ok()?;
-        let res = self.get_wiki_user_id(username).await;
-        res
+
+    pub fn get_api_for_wiki(wiki: &str) -> Result<wikibase::mediawiki::api::Api,GulpError> {
+        let api_url = format!("https://{}/w/api.php",AppState::get_server_for_wiki(wiki));
+        let api = std::thread::spawn(move || {
+            tokio::runtime::Runtime::new().unwrap().block_on(async { wikibase::mediawiki::api::Api::new(&api_url).await } )
+        }).join().expect("Thread panicked")?;
+        Ok(api)
     }
 
     pub async fn get_lists_by_user_rights(&self, user_id: DbId, rights: &str) -> Option<Vec<Value>> {
@@ -150,6 +151,25 @@ impl AppState {
                 }
             }
         }
+    }
+
+    pub async fn get_all_header_schemas(&self) -> Result<Vec<crate::header::HeaderSchema>,GulpError> {
+        let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE id>"#;
+        Ok(self.get_gulp_conn().await?
+            .exec_iter(sql,()).await?
+            .map_and_drop(|row| crate::header::HeaderSchema::from_row(&row)).await?
+            .iter().filter_map(|s|s.to_owned()).collect())
+    }
+
+    pub async fn get_url_as_json(url: &str) -> Option<Value> {
+        reqwest::get(url).await.ok()?.json::<Value>().await.ok()
+    }
+
+    pub fn get_new_filename(&self) -> String {
+        let mut pathbuf = std::path::PathBuf::from(&self.import_file_path);
+        pathbuf.push(&uuid::Uuid::new_v4().to_string());
+        pathbuf.set_extension("gulp");
+        pathbuf.to_string_lossy().to_string()
     }
 }
 

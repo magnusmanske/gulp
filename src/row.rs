@@ -3,8 +3,6 @@ use mysql_async::{prelude::*, Conn};
 use serde_json::json;
 use crate::header::*;
 use crate::cell::*;
-//use datetime::LocalDateTime;
-// use crate::GenericError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Row {
@@ -68,7 +66,7 @@ impl Row {
             .map_and_drop(|_row| 1).await.ok()?.is_empty())
     }
 /*
-    pub async fn insert_new(&mut self, conn: &mut conn, user_id: DbId) -> Result<(), GenericError> {
+    pub async fn insert_new(&mut self, conn: &mut conn, user_id: DbId) -> Result<(), GulpError> {
         let sql = r#"REPLACE INTO `row` (list_id,row_num,revision_id,json_id,user_id) VALUES (:list_id,:row_num,:revision_id,:json,:user_id)"#;
         let list_id = self.list_id;
         let row_num = self.row_num;
@@ -139,9 +137,9 @@ mod tests {
     #[tokio::test]
     async fn test_from_db() {
         let app = AppState::from_config_file("config.json").expect("app creation failed");
-        let mut conn = app.get_gulp_conn().await.unwrap();
-        let header = Header::from_list_id(&mut conn,4).await.unwrap();
-        let row = Row::from_db(&mut conn,4,1,1,&header).await.unwrap();
+        let mut conn = app.get_gulp_conn().await.expect("get_gulp_conn");
+        let header = Header::from_list_id(&mut conn,4).await.expect("from_list_id");
+        let row = Row::from_db(&mut conn,4,1,1,&header).await.expect("from_db");
         assert_eq!(row.id,1);
         assert_eq!(row.json,"[\"Q111028176\",\"Buergerwehrbrunnen Bensheim.jpg\"]");
         assert_eq!(row.cells.len(),2);
