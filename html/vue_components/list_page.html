@@ -33,7 +33,7 @@ ul.list-top li {
 					<button class="btn btn-outline-secondary" href="#" @click.prevent="snapshot" tt='snapshot' style="margin-top: -0.4rem;"></button>
 				</li>
 				<li>
-					<router-link class="btn btn-outline-secondary" :to="'/update/'+list.list.id" tt="update"></router-link>
+					<router-link class="btn btn-outline-secondary" :to="'/list/update/'+list.list.id" tt="update"></router-link>
 				</li>
 		</div>
 		<list :list='list' :revision_id='revision_id'></list>
