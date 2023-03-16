@@ -127,6 +127,28 @@ impl HeaderColumn {
         return self.to_owned();
     }
 
+    fn uc_first(s: &str) -> String {
+        let mut v: Vec<char> = s.chars().collect();
+        v[0] = v[0].to_uppercase().nth(0).unwrap_or(v[0]);
+        v.into_iter().collect()
+    }
+
+    pub fn generate_name(&self) -> String {
+        match self.column_type {
+            ColumnType::String => "text".into(),
+            ColumnType::WikiPage => {
+                let mut parts = vec![];
+                if let Some(wiki) = &self.wiki {
+                    parts.push(Self::uc_first(&wiki.replace("wiki","")))
+                }
+                if let Some(namespace_id) = self.namespace_id {
+                    parts.push(format!("NS{namespace_id}"))
+                }
+                parts.join(" ")
+            }
+        }
+    }
+
     async fn count_existing_pages(&self, wiki: &str, pages: &Vec<String>) -> usize {
         let server = AppState::get_server_for_wiki(wiki);
         // `urls` needs to outlive `futures`
@@ -216,6 +238,14 @@ impl HeaderSchema {
         })
     }
 
+    pub fn generate_name(&self) -> String {
+        let parts: Vec<_>= self.columns
+            .iter()
+            .map(|column|column.generate_name())
+            .collect();
+        parts.join(", ")
+    }
+
     pub async fn create_in_db(&mut self, app: &std::sync::Arc<AppState>) -> Result<DbId,crate::GulpError> {
         if self.id!=0 {
             return Err("create_in_db: Already has an id".into());
@@ -223,7 +253,10 @@ impl HeaderSchema {
         let mut conn = app.get_gulp_conn().await?;
 
         // Check if there is already a header schema with that exact JSON
-        let name = self.name.to_string();
+        let mut name = self.name.trim().to_string();
+        if name.is_empty() {
+            name = self.generate_name();
+        }
         let json = json!({"columns":self.columns}).to_string();
         let sql = "SELECT id,name,json FROM `header_schema` WHERE `json`=:json" ;
         if let Some(hs) = conn.exec_iter(sql,params! {json}).await?.map_and_drop(|row| Self::from_row(&row)).await?.get(0) {

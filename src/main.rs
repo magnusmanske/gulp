@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use clap::{Parser, Subcommand};
 use app_state::AppState;
-use data_source::DataSource;
+use header::HeaderSchema;
 use std::sync::Arc;
 use api::run_server;
 pub use error::GulpError;
@@ -49,9 +49,11 @@ async fn main() -> Result<(), GulpError> {
             run_server(app).await?;
         }
         Some(Commands::Test) => {
-            let source = DataSource::from_db(&app,8).await.unwrap();
-            let list = list::List::from_id(&app, source.list_id).await.unwrap();
-            list.update_from_source(&source, 1).await.unwrap();
+            let hs = HeaderSchema::from_id_app(&app,6).await.unwrap();
+            println!("{}",hs.generate_name());
+            // let source = DataSource::from_db(&app,8).await.unwrap();
+            // let list = list::List::from_id(&app, source.list_id).await.unwrap();
+            // list.update_from_source(&source, 1).await.unwrap();
 
             // let session = app.store.load_session("yFE28eun2Mqag9y/g9+PqG2zeULtmLlCs3+C9ExmJiw=".to_string()).await;
             // let session = session.unwrap().unwrap();
