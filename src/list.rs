@@ -44,6 +44,7 @@ impl List {
     pub async fn set_header_schema(&mut self, header_schema: HeaderSchema) -> Result<(),GulpError> {
         let mut header = Header { id: 0, list_id:self.id, revision_id: self.revision_id, schema: header_schema };
         let _ = header.create_in_db(&self.app).await?;
+        self.header = header;
         Ok(())
     }
 
