@@ -286,6 +286,9 @@ impl List {
 
         for row in &cell_set.rows {
             if let Some(row) = self.get_or_ignore_new_row(&mut conn, &md5s, row.cells.to_owned(), next_row_num, user_id).await? {
+                if row.cells.is_empty() {
+                    continue;
+                }
                 next_row_num += 1;
                 md5s.insert(row.json_md5.to_owned());
                 rows.push(row);
