@@ -74,7 +74,7 @@
 	
 				<div class="col-sm-8">
 					<div v-if="source_type=='URL'">
-						<input type="text" v-model="source_url" style="width:100%" tt_placeholder="url" />
+						<input type="text" v-model="location" style="width:100%" tt_placeholder="url" />
 					</div>
 					<div v-else-if="source_type=='FILE'">
 						<span v-if="typeof uploaded_file!='undefined'">
@@ -91,7 +91,7 @@
 						</form>
 					</div>
 					<div v-else-if="source_type=='PAGEPILE'">
-						<input type="text" v-model="source_url" style="width:10rem;" tt_placeholder="pagepile_id" />
+						<input type="text" v-model="location" style="width:10rem;" tt_placeholder="pagepile_id" />
 					</div>
 				</div>
 			</div>
@@ -138,7 +138,7 @@
 
 let UpdatePage = Vue.extend ( {
 	props : ["list_or_new"] ,
-	data : function () { return { list_or_new_is_valid:false , list_id:0, source_type:"URL" , source_format:"TSV" , source_url:"" ,
+	data : function () { return { list_or_new_is_valid:false , list_id:0, source_type:"URL" , source_format:"TSV" , location:"" ,
 		existing_sources:[] , users:{} , loading:true , uploaded_file:undefined,
 	} } ,
 	created : function () {
@@ -179,30 +179,32 @@ let UpdatePage = Vue.extend ( {
 		},
 		is_valid() {
 			if ( this.source_type=="PAGEPILE" ) {
-				return !isNaN(this.source_url) && this.source_url!='';
+				return !isNaN(this.location) && this.location!='';
 			}
 			if ( this.source_type=="FILE" ) {
-				return typeof self.uploaded_file!='undefined';
+				return typeof this.uploaded_file!='undefined';
 			}
-			return this.source_url!='';
+			return this.location!='';
 		},
 		create_new_source() {
 			if ( !this.is_valid() ) return ;
 			if ( typeof this.list_id!='undefined' ) {
 				let source_format = this.source_format;
 				if ( this.source_type=="PAGEPILE" ) source_format = this.source_type;
-				let location = this.source_url;
-				if ( this.source_type=='FILE' ) location = this.uploaded_file.id;
+				let location = this.location;
+				if ( this.source_type=='FILE' ) location = this.uploaded_file.id; // Using file ID to prevent user supplying local paths, API will take care of it
 				let url = "/source/create/"+this.list_id+"?type="+encodeURIComponent(this.source_type)+"&format="+encodeURIComponent(source_format)+"&location="+encodeURIComponent(location);
 	            fetch(url)
 	                .then((response) => response.json())
 	                .then((d) => {
 	                	if (d.status=="OK") {
 	                		let source = d.data;
-	                		this.existing_sources.push(source);
-	                		this.update_from_existing_source(source,function(){
-	                			window.location.reload();
-	                		});
+							let url = "/source/header/"+source.id+"/"+this.list_id;
+							this.$router.push(url);
+	                		// this.existing_sources.push(source);
+	                		// this.update_from_existing_source(source,function(){
+	                		// 	window.location.reload();
+	                		// });
 	                	} else {
 	                		alert(d.status);
 	                	}

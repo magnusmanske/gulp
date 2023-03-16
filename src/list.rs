@@ -30,7 +30,7 @@ impl List {
         let mut conn = app.get_gulp_conn().await.ok()?;
         let header_schema = HeaderSchema::from_id(&mut conn, header_schema_id).await?;
 
-        let sql = "INSERT INTO `list` (`name`) VALUES (:name)" ;
+        let sql = "INSERT INTO `list` (`name`,`created`) VALUES (:name,now())" ;
         conn.exec_drop(sql, params!{name}).await.ok()?;
         let list_id = conn.last_insert_id()?;
         drop(conn);
@@ -278,8 +278,8 @@ impl List {
         let mut next_row_num = self.get_max_row_num(&mut conn).await? + 1;
         let mut rows = vec![];
 
-        for cells in &cell_set.rows {
-            if let Some(row) = self.get_or_ignore_new_row(&mut conn, &md5s, cells.to_owned(), next_row_num, user_id).await? {
+        for row in &cell_set.rows {
+            if let Some(row) = self.get_or_ignore_new_row(&mut conn, &md5s, row.cells.to_owned(), next_row_num, user_id).await? {
                 next_row_num += 1;
                 md5s.insert(row.json_md5.to_owned());
                 rows.push(row);

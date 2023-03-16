@@ -17,7 +17,7 @@
 			</form>
 		</div>
 	</div>
-	<div class="row" v-if="user().is_logged_in && header_schemas.length>0" style="margin-top: 2rem;">
+<!--	<div class="row" v-if="user().is_logged_in && header_schemas.length>0" style="margin-top: 2rem;">
 		<div class="col-md-12">
 			<div style="float: right;">
 				<router-link class="btn btn-outline-success" to="/create/header" tt="create_new_header"></router-link>
@@ -39,7 +39,7 @@
 				</table>
 			</div>
 		</div>
-	</div>
+	</div>-->
 	</div>
 </template>
 	
@@ -51,7 +51,7 @@ let CreateListPage = Vue.extend ( {
 	props : ["list_or_new"] ,
 	data : function () { return { name:"" , header_schemas:[] , header_schema_id:0 , message:'' } } ,
 	created : function () {
-		this.load_header_schemas();
+		// this.load_header_schemas();
 	},
 	updated : function () { tt.updateInterface(this.$el) } ,
 	mounted : function () { tt.updateInterface(this.$el) } ,
@@ -62,31 +62,31 @@ let CreateListPage = Vue.extend ( {
 				this.message = tt.t("name_required") ;
 				return ;
 			}
-			if ( this.header_schema_id==0 ) {
-				this.message = tt.t("header_schema_required");
-				return ;
-			}
+			// if ( this.header_schema_id==0 ) {
+			// 	this.message = tt.t("header_schema_required");
+			// 	return ;
+			// }
 			this.message = "";
-    		let url = "/list/new?name="+encodeURIComponent(this.name)+"&header_schema_id="+this.header_schema_id;
+    		let url = "/list/new?name="+encodeURIComponent(this.name);//+"&header_schema_id="+this.header_schema_id;
             fetch(url)
                 .then((response) => response.json())
                 .then((d) => {
                 	if (d.status=="OK") {
                 		let list_id = d.data;
-                		this.$router.push ("/update/"+list_id);
+                		this.$router.push ("/list/update/"+list_id);
                 	} else {
                 		alert(d.status);
                 	}
                 })
 		},
-		load_header_schemas() {
-    		let url = "/header/schemas";
-            fetch(url)
-                .then((response) => response.json())
-                .then((d) => {
-                	this.header_schemas = d.data;
-                })
-		},
+		// load_header_schemas() {
+    	// 	let url = "/header/schemas";
+        //     fetch(url)
+        //         .then((response) => response.json())
+        //         .then((d) => {
+        //         	this.header_schemas = d.data;
+        //         })
+		// },
 		user() { return user??{is_logged_in:false} }
 	} ,
 	template:"#create-list-page-template"

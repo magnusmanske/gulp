@@ -166,6 +166,14 @@ pub struct HeaderSchema {
 }
 
 impl HeaderSchema {
+    pub fn new() -> Self {
+        Self {
+            id: 0,
+            name: String::new(),
+            columns: vec![],
+        }
+    }
+
     pub async fn from_id(conn: &mut Conn, header_schema_id: DbId) -> Option<Self> {
         let sql = r#"SELECT header_schema.id,name,json FROM header_schema WHERE header_schema.id=:header_schema_id"#;
         conn
@@ -252,6 +260,15 @@ pub struct Header {
 }
 
 impl Header {
+    pub fn new() -> Self {
+        Self {
+            id: 0,
+            list_id: 0,
+            revision_id: 0,
+            schema: HeaderSchema::new(),
+        }
+    }
+
     pub async fn from_list_id(conn: &mut Conn, list_id: DbId) -> Option<Self> {
         Self::from_list_revision_id(conn, list_id, DbId::MAX).await
     }

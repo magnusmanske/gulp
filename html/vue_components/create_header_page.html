@@ -6,6 +6,9 @@
  .margin-left {
  	margin-left: 0.5rem;
  }
+ .top-distance {
+	margin-top: 2rem;
+ }
 </style>
 
 <template id="create-header-page-template">
@@ -27,7 +30,10 @@
 			</form>
 		</div>
 	</div>
-	<div v-if="user().is_logged_in" class="row" style="margin-top: 2rem;">
+	<div v-if="loading" class="row top-distance">
+		<i tt="autodetecting_headers"></i>
+	</div>
+	<div v-else-if="user().is_logged_in" class="row top-distance">
 		<div class="col-md-12">
 			<h2 tt="columns"></h2>
 			<table class="table">
@@ -56,6 +62,20 @@
 			<button class="btn btn-outline-success" tt="create_new_column" @click.prevent="create_new_column"></button>
 		</div>
 	</div>
+	<div v-if="!loading && rows.length>0" class="row top-distance">
+		<h2 tt="preview"></h2>
+		<table class="table">
+            <tr>
+                <th v-for='column,idx in columns'>#{{idx+1}}: {{column.label||autoLabel(column)}}</th>
+            </tr>
+            <tr v-for="row,rownum in rows" :key="rownum">
+                <td v-for="cell,idx in row.c">
+                    <cell :value='cell' :header='columns[idx]'></cell>
+                </td>
+            </tr>
+        </table>
+
+	</div>
 	</div>
 </template>
 	
@@ -64,10 +84,17 @@
 
 
 let CreateHeaderPage = Vue.extend ( {
-	props : [] ,
-	data : function () { return { name:"" , message:'' , columns:[] } } ,
+	props : ['source_id','list_id'] ,
+	data : function () { return { name:"", message:'', columns:[], rows:[], loading:true } } ,
 	created : function () {
-		this.create_new_column();
+		let url = "/source/header/"+this.source_id;
+		fetch(url)
+			.then((response) => response.json())
+			.then((d) => {
+				this.columns = d.headers.schema.columns;
+				this.rows = d.rows;
+				this.loading = false;
+			});
 	},
 	updated : function () { tt.updateInterface(this.$el) } ,
 	mounted : function () { tt.updateInterface(this.$el) } ,
@@ -88,7 +115,6 @@ let CreateHeaderPage = Vue.extend ( {
 				json: JSON.stringify({ "columns": this.columns })
 			};
 			let url = "/header/schema/new?name="+encodeURIComponent(payload.name)+"&json="+encodeURIComponent(payload.json);
-			console.log(url);
             fetch(url)
                 .then((response) => response.json())
                 .then((d) => {
@@ -104,8 +130,14 @@ let CreateHeaderPage = Vue.extend ( {
 		} ,
 		create_new_column() {
 			this.columns.push({
-				column_type:"WikiPage"
+				column_type:"String"
 			});
+		},
+		autoLabel(column) {
+			let label = column.column_type;
+			if ( column.wiki!=null ) label += " ["+column.wiki+"]";
+			if ( column.namespace_id!=null ) label += " [NS "+column.namespace_id+"]";
+			return label;
 		},
 		user() { return user??{is_logged_in:false} }
 	} ,

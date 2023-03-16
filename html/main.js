@@ -46,6 +46,7 @@ var ns_cache = {
         return wiki.replace(/^(.+)(wik.+)$/,"$1.$2.org");
     },
     prefix_with_namespace(wiki,namespace_id,title) {
+        if ( namespace_id==0 ) return title;
         return this.cache[wiki][namespace_id].canonical+":"+title;
     }
 
@@ -94,14 +95,11 @@ $(document).ready(function(){
           { path: '/list/update/:list_or_new', component: UpdatePage , props:true },
           { path: '/list/:list_id', component: ListPage , props:true },
           { path: '/list/:list_id/:initial_revision_id', component: ListPage , props:true },
-          { path: '/update/:list_or_new', component: UpdatePage , props:true },
-          { path: '/upload/', component: UploadPage , props:true },
-          { path: '/create/list', component: CreateListPage , props:true },
-          { path: '/create/header', component: CreateHeaderPage , props:true },
-/*
-          { path: '/group', component: CatalogGroup , props:true },
-          { path: '/group/:key', component: CatalogGroup , props:true },
-*/
+        //   { path: '/update/:list_or_new', component: UpdatePage , props:true },
+        //   { path: '/upload/', component: UploadPage , props:true },
+        //   { path: '/create/list', component: CreateListPage , props:true },
+        //   { path: '/create/header', component: CreateHeaderPage , props:true },
+          { path: '/source/header/:source_id/:list_id', component: CreateHeaderPage , props:true },
         ] ;
 
         router = new VueRouter({routes}) ;

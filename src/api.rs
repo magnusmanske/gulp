@@ -29,6 +29,7 @@ use axum::{
 use crate::GulpError;
 
 const MAX_UPLOAD_MB: usize = 50;
+const EMPTY_HEADER_SCHEMA_ID: DbId = 3;
 
 async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let j = json!({"status":"OK","user":User::from_cookies(&state, &cookies).await});
@@ -92,7 +93,10 @@ async fn source_header(State(state): State<Arc<AppState>>, Path(source_id): Path
         Err(e) => return json_error(&e.to_string()),
     };
 
-    let j = json!({"status":"OK","headers":cell_set.headers,"rows":cell_set.rows});
+    let mut header = crate::header::Header::new();
+    header.schema.columns = cell_set.headers;
+    let rows: Vec<serde_json::Value> = cell_set.rows.iter().map(|row|row.as_json(&header)).collect();
+    let j = json!({"status":"OK","headers":header,"rows":rows});
     (StatusCode::OK, Json(j)).into_response()
 }
 
@@ -111,7 +115,7 @@ async fn source_update(State(state): State<Arc<AppState>>, Path(source_id): Path
         None => return json_error("Not logged in"),
     };
     if !user.can_update_from_source(list.id).await {
-        return json_error("You are nor allowed to create a new data source for this list. Please ask the list admin(s) for permission.");
+        return json_error(&format!("You are nor allowed to update list {}. Please ask the list admin(s) for permission.",list.id));
     }
     let x = list.update_from_source(&source, user.id).await;
     match x {
@@ -144,6 +148,7 @@ async fn source_create(State(state): State<Arc<AppState>>, Path(list_id): Path<D
         },
         None => return json_error("Missing format"),
     };
+
     let mut location = match params.get("location") {
         Some(location) => location.to_owned(),
         None => return json_error("Missing location"),
@@ -189,7 +194,7 @@ async fn list_snapshot(State(state): State<Arc<AppState>>, Path(id): Path<DbId>,
         None => return json_error("Not logged in"),
     };
     if !user.can_create_snapshot(list.id).await {
-        return json_error("You are nor allowed to create a new data source for this list. Please ask the list admin(s) for permission.");
+        return json_error("You are nor allowed to create a new snapshot for this list. Please ask the list admin(s) for permission.");
     }
     let old_revision_id = list.revision_id;
     let new_revision_id = match list.snapshot().await {
@@ -234,20 +239,19 @@ async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashM
         Some(name) => name.to_owned(),
         None => return json_error("A name is required")
     };
-    let header_schema_id = match params.get("header_schema_id") {
-        Some(s) => {
-            match s.parse::<DbId>() {
-                Ok(id) => id,
-                Err(e) => return json_error(&e.to_string()),
-            }
-        },
-        None => return json_error("A header_schema_id is required"),
-    };
+    let header_schema_id = params.get("header_schema_id")
+        .map(|s|s.to_owned())
+        .unwrap_or_else(||"".to_string())
+        .parse::<DbId>()
+        .unwrap_or(EMPTY_HEADER_SCHEMA_ID);
     let list = match List::create_new(&state, &name, header_schema_id).await {
         Some(list) => list,
         None => return json_error("New list could not be created"),
     };
-    let _ = list.add_access(&state, user_id,"admin").await;
+    match list.add_access(&state, user_id,"admin").await {
+        Ok(_) => {},
+        Err(e) => return json_error(&format!("List {} was created, but you could not be added as list admin ({e}).",list.id)),
+    }
     let j = json!({"status":"OK","data":list.id});
     (StatusCode::OK, Json(j)).into_response()
 }

@@ -29,6 +29,26 @@ impl Row {
             .get(0)?.to_owned()
     }
 
+    pub fn new() -> Self {
+        Self {
+            id: 0,
+            list_id: 0,
+            row_num: 0,
+            revision_id: 0,
+            json: String::new(),
+            json_md5: String::new(),
+            user_id: 0,
+            modified: String::new(),
+            cells: vec![],
+        }
+    }
+
+    pub fn from_cells(cells: Vec<Option<Cell>>) -> Self {
+        let mut ret = Self::new();
+        ret.cells = cells;
+        ret
+    }
+
     fn get_timestamp_from_row(v: &mysql_async::Value) -> String {
         v.as_sql(true).replace("'","")
     }

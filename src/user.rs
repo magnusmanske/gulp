@@ -107,8 +107,8 @@ impl User {
                     Ok(conn) => conn,
                     Err(_) => return HSS::new(),
                 };
-                let result = match conn.exec_iter(sql,params! {user_id}).await {
-                    Ok(x) => x,
+                let result = match conn.exec_iter(sql,params! {user_id,list_id}).await {
+                    Ok(result) => result,
                     Err(_) => return HSS::new(),
                 };
                 let v = match result.map_and_drop(|row| mysql_async::from_row::<String>(row)).await {

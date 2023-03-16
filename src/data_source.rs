@@ -1,3 +1,4 @@
+use crate::row::Row;
 use crate::{GulpError, header::*, app_state::AppState};
 use std::sync::Arc;
 use std::fs::File;
@@ -67,14 +68,14 @@ pub struct LineSet {
 #[derive(Clone, Debug, Serialize)]
 pub struct CellSet {
     pub headers: Vec<HeaderColumn>,
-    pub rows: Vec<Vec<Option<Cell>>>,
+    pub rows: Vec<Row>,
 }
 
 impl CellSet {
     pub fn get_cells_in_column(&self, column: usize) -> Vec<Cell> {
         self.rows
             .iter()
-            .filter_map(|row|row.get(column))
+            .filter_map(|row|row.cells.get(column))
             .cloned()
             .filter_map(|c|c)
             .collect()
@@ -114,12 +115,13 @@ impl DataSourceLineConverter for DataSourceFormatJSONL {
         for line in &line_set.lines {
             let json: serde_json::Value = serde_json::from_str(line)?;
             let array = json.as_array().ok_or_else(||"import_jsonl: valid JSON but not an array: {row}")?;
-            let cells: Vec<Option<Cell>> = array
+            let mut row = Row::new();
+            row.cells = array
                 .iter()
                 .zip(headers.iter())
                 .map(|(value,column)|Cell::from_value(value, column))
                 .collect();
-            rows.push(cells);
+            rows.push(row);
         }
         Ok(CellSet{headers:headers.to_owned(),rows})
     }
@@ -133,11 +135,12 @@ impl DataSourceLineConverter for DataSourceFormatPagePile {
         let header = line_set.headers.get(0).ok_or_else(||"PagePile line_set has no headers")?;
         let wiki = header.wiki.as_ref().ok_or_else(||"PagePile first header has no wiki")?;
         let api = AppState::get_api_for_wiki(wiki)?;
-        let rows: Vec<_> = line_set.lines
+        let rows: Vec<Row> = line_set.lines
             .iter()
             .map(|line|wikibase::mediawiki::title::Title::new_from_full(&line, &api))
             .map(|title|WikiPage{ title: title.pretty().to_string(), namespace_id: Some(title.namespace_id()), wiki: Some(wiki.to_owned()) })
             .map(|page|vec![Some(Cell::WikiPage(page))])
+            .map(|cells|Row::from_cells(cells))
             .collect();
         Ok(CellSet{headers:line_set.headers.to_owned(),rows})
     }
@@ -284,8 +287,8 @@ impl DataSource {
     }
 
     pub async fn guess_headers(&self, limit: Option<usize>) -> Result<CellSet,GulpError> {
-        let line_set = self.get_lines(limit).await?;
-        let mut cell_set = self.source_format.line_converter().get_cells(&line_set)?;
+        let mut line_set = self.get_lines(limit).await?;
+        let cell_set = self.source_format.line_converter().get_cells(&line_set)?;
         let headers = cell_set.headers.to_owned();
         let futures: Vec<_> = headers
             .iter()
@@ -293,7 +296,11 @@ impl DataSource {
             .map(|(column,header)|(cell_set.get_cells_in_column(column),header))
             .map(|(cells,header)|header.guess(cells))
             .collect();
-        cell_set.headers = futures::future::join_all(futures).await;
+        
+        // Use new headers
+        line_set.headers = futures::future::join_all(futures).await;
+        let cell_set = self.source_format.line_converter().get_cells(&line_set)?;
+
         Ok(cell_set)
     }
 
@@ -318,7 +325,8 @@ impl DataSource {
             while headers.len()<record.len() {
                 headers.push(HeaderColumn { column_type: ColumnType::String, wiki: None, string: None, namespace_id: None });
             }
-            let cells: Vec<Option<Cell>> = record
+            let mut row = Row::new();
+            row.cells = record
                 .iter()
                 .zip(headers.iter())
                 .map(|(value,column)|{
@@ -326,7 +334,7 @@ impl DataSource {
                     Cell::from_value(&value, column)
                 })
                 .collect();
-            rows.push(cells);            
+            rows.push(row);            
         }
         Ok(CellSet{headers,rows})
     }
