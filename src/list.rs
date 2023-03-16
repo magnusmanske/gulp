@@ -30,7 +30,7 @@ impl List {
         let mut conn = app.get_gulp_conn().await.ok()?;
         let header_schema = HeaderSchema::from_id(&mut conn, header_schema_id).await?;
 
-        let sql = "INSERT INTO `list` (`name`,`created`) VALUES (:name,now())" ;
+        let sql = "INSERT INTO `list` (`name`) VALUES (:name)" ;
         conn.exec_drop(sql, params!{name}).await.ok()?;
         let list_id = conn.last_insert_id()?;
         drop(conn);
