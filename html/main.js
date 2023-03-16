@@ -52,6 +52,27 @@ var ns_cache = {
 
 };
 
+function get_column_label(c,idx) {
+    if ( typeof c.label!='undefined' ) return c.label ; // Already has a label
+    if ( c.column_type=='WikiPage' ) {
+        if ( c.wiki==null ) {
+            return tt.t("wiki_page");
+        } else {
+            let label = c.wiki.replace(/wiki$/,'') ;
+            label = label.charAt(0).toUpperCase() + label.slice(1);
+            if ( c.wiki=='wikidatawiki' ) {
+                if (c.namespace_id==0) label += " item";
+                else if (c.namespace_id==120) label += " property";
+                else label += " page";
+            } else if ( c.wiki=='commonswiki' ) {
+                if (c.namespace_id==6) label += " file";
+                else label += " page";
+            } else label += " page";
+            return label;
+        }
+    } else return "Column "+idx;
+}
+
 function set_user_data(d) {
     user = d.user;
     if ( user==null ) {

@@ -106,23 +106,7 @@ let ListPage = Vue.extend ( {
         } ,
 		fix_columns() {
             this.list.list.header.schema.columns.forEach(function(c,idx){
-            	if ( typeof c.label!='undefined' ) return ; // Already has a label
-            	if ( c.column_type=='WikiPage' ) {
-            		if ( c.wiki==null ) {
-            			c.label = tt.t("wiki_page");
-            		} else {
-	            		c.label = c.wiki.replace(/wiki$/,'') ;
-	            		c.label = c.label.charAt(0).toUpperCase() + c.label.slice(1);
-	            		if ( c.wiki=='wikidatawiki' ) {
-	            			if (c.namespace_id==0) c.label += " item";
-	            			else if (c.namespace_id==120) c.label += " property";
-	            			else c.label += " page";
-	            		} else if ( c.wiki=='commonswiki' ) {
-	            			if (c.namespace_id==6) c.label += " file";
-	            			else c.label += " page";
-	            		} else c.label += " page";
-	            	}
-            	} else c.label = "Column "+idx;
+				c.label = get_column_label(c,idx);
             });
         } ,
 

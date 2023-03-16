@@ -66,7 +66,7 @@
 		<h2 tt="preview"></h2>
 		<table class="table">
             <tr>
-                <th v-for='column,idx in columns'>#{{idx+1}}: {{column.label||autoLabel(column)}}</th>
+                <th v-for='column,idx in columns'>#{{idx+1}}: {{column.label||autoLabel(column,idx)}}</th>
             </tr>
             <tr v-for="row,rownum in rows" :key="rownum">
                 <td v-for="cell,idx in row.c">
@@ -162,11 +162,8 @@ let CreateHeaderPage = Vue.extend ( {
 				column_type:"String"
 			});
 		},
-		autoLabel(column) {
-			let label = column.column_type;
-			if ( column.wiki!=null ) label += " ["+column.wiki+"]";
-			if ( column.namespace_id!=null ) label += " [NS "+column.namespace_id+"]";
-			return label;
+		autoLabel(column,idx) {
+			return get_column_label(column,idx);
 		},
 		user() { return user??{is_logged_in:false} }
 	} ,
