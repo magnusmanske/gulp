@@ -111,6 +111,7 @@ impl AppState {
             let rights = format!("\"{}\"",rights.join("\",\""));
             format!(r#"SELECT list.id,list.name,list.revision_id,GROUP_CONCAT(DISTINCT `right`) FROM `list`,`access` WHERE user_id=:user_id AND list_id=list.id AND `right` IN ({rights}) GROUP BY list.id"#)
         };
+        let sql = format!("{sql} ORDER BY list.updated DESC");
         let rows = self.get_gulp_conn().await.ok()?
             .exec_iter(sql,params! {user_id}).await.ok()?
             .map_and_drop(|row| mysql_async::from_row::<(DbId,String,DbId,String)>(row)).await.ok()?;
