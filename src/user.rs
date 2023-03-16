@@ -137,4 +137,9 @@ impl User {
         access.contains("admin") || access.contains("write") || access.contains("create_snapshot")
     }
 
+    pub async fn can_set_new_header_schema_for_list(&self, list_id: DbId) -> bool {
+        let access = self.get_access_for_list(list_id).await;
+        access.contains("admin") || access.contains("write") || access.contains("set_new_header_schema_for_list")
+    }
+
 }

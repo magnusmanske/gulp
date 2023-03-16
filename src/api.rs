@@ -4,7 +4,7 @@ use crate::file::File;
 use crate::gulp_response::ContentType;
 use crate::list::List;
 use crate::oauth::*;
-use crate::header::DbId;
+use crate::header::{DbId, HeaderSchema};
 use crate::user::User;
 use std::io::prelude::*;
 use csv::WriterBuilder;
@@ -256,6 +256,32 @@ async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashM
     (StatusCode::OK, Json(j)).into_response()
 }
 
+async fn list_header_schema(State(state): State<Arc<AppState>>, Path((list_id,header_schema_id)): Path<(DbId,DbId)>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
+    let user = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user,
+        None => return json_error("Please log in to set a new header schema for a list"),
+    };
+    if !user.can_set_new_header_schema_for_list(list_id).await {
+        return json_error("You do not have permission to set a new header schema for list {list_id}");
+    }
+    let list = match AppState::get_list(&state,list_id).await {
+        Some(list) => list,
+        None => return json_error_gone(&format!("Error retrieving list; No list #{list_id} perhaps?")),
+    };
+    let header_schema = match HeaderSchema::from_id_app(&state, header_schema_id).await {
+        Ok(header_schema) => header_schema,
+        Err(e) => return json_error(&e.to_string()),
+    };
+    let mut list = list.lock().await;
+    match list.set_header_schema(header_schema).await {
+        Ok(_) => {},
+        Err(e) => return json_error(&e.to_string()),
+    }
+
+    let j = json!({"status":"OK"});
+    (StatusCode::OK, Json(j)).into_response()
+}
+
 async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Query<HashMap<String, String>>) -> Response {
     let name = match params.get("name") {
         Some(name) => name.to_owned(),
@@ -275,7 +301,10 @@ async fn new_header_schema(State(state): State<Arc<AppState>>, Query(params): Qu
     };
     match hs.create_in_db(&state).await {
         Ok(0) => json_error("INSERT was run but no new ID was returned"),
-        Ok(_id) => json_error("OK"),
+        Ok(id) => {
+            let j = json!({"status":"OK","header_schema_id":id});
+            (StatusCode::OK, Json(j)).into_response()        
+        }
         Err(e) => json_error(&e.to_string()),
     }
 }
@@ -392,6 +421,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GulpError> {
         .route("/list/snapshot/:id", get(list_snapshot))
         .route("/list/sources/:id", get(list_sources))
         .route("/list/new", get(new_list))
+        .route("/list/header_schema/:list_id/:header_schema_id", get(list_header_schema))
 
         .route("/header/schemas", get(header_schemas))
         .route("/header/schema/new", get(new_header_schema))

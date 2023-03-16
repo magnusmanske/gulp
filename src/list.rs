@@ -41,6 +41,12 @@ impl List {
         Self::from_id(app, list_id).await
     }
 
+    pub async fn set_header_schema(&mut self, header_schema: HeaderSchema) -> Result<(),GulpError> {
+        let mut header = Header { id: 0, list_id:self.id, revision_id: self.revision_id, schema: header_schema };
+        let _ = header.create_in_db(&self.app).await?;
+        Ok(())
+    }
+
     pub async fn add_access(&self, app: &Arc<AppState>, user_id: DbId, access: &str) -> Result<(),GulpError> {
         let list_id = self.id;
         let sql = "INSERT IGNORE INTO `access` (list_id,user_id,`right`) VALUES (:list_id,:user_id,:access)";

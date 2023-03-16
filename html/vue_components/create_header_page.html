@@ -99,12 +99,44 @@ let CreateHeaderPage = Vue.extend ( {
 	updated : function () { tt.updateInterface(this.$el) } ,
 	mounted : function () { tt.updateInterface(this.$el) } ,
 	methods : {
-		submit_form() {
+		update_from_source() { // Updates the list from the new source, using the new header schema
+			let url = "/source/update/"+this.source_id;
+            fetch(url)
+                .then((response) => response.json())
+                .then((d) => {
+                	if ( d.status=="OK" ) {
+						if ( typeof this.list_id!="undefined" ) {
+							let url = "/list/"+this.list_id;
+							this.$router.push(url);
+							return;
+						}
+                		alert(tt.t("successfully_created"))
+                		this.name = "" ;
+                		this.columns = [] ;
+                		this.create_new_column();
+                	} else {
+                		this.message = d.status;
+                	}
+                })
+		},
+		update_list_header_schema(header_schema_id) { // Links the new header schema with the list
+			let url = "/list/header_schema/"+this.list_id+"/"+header_schema_id;
+            fetch(url)
+                .then((response) => response.json())
+                .then((d) => {
+                	if ( d.status=="OK" ) {
+						this.update_from_source();
+                	} else {
+                		this.message = d.status;
+                	}
+                })
+		},
+		submit_form() { // Creates a new header schema
 			this.name = this.name.trim();
-			if ( this.name=="" ) {
-				this.message = tt.t("name_required") ;
-				return ;
-			}
+			// if ( this.name=="" ) {
+			// 	this.message = tt.t("name_required") ;
+			// 	return ;
+			// }
 			if ( this.columns.length==0 ) {
 				this.message = tt.t("columns_required") ;
 				return ;
@@ -119,10 +151,7 @@ let CreateHeaderPage = Vue.extend ( {
                 .then((response) => response.json())
                 .then((d) => {
                 	if ( d.status=="OK" ) {
-                		alert(tt.t("successfully_created"))
-                		this.name = "" ;
-                		this.columns = [] ;
-                		this.create_new_column();
+						this.update_list_header_schema(d.header_schema_id);
                 	} else {
                 		this.message = d.status;
                 	}

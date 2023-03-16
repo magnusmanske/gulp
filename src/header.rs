@@ -1,7 +1,7 @@
 use futures::future::join_all;
 use mysql_async::{prelude::*, Conn};
 use regex::Regex;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use serde::Serialize;
 use serde_json::json;
 
@@ -182,6 +182,13 @@ impl HeaderSchema {
             .get(0)?.to_owned()
     }
 
+    pub async fn from_id_app(app: &Arc<AppState>, header_schema_id: DbId) -> Result<Self,crate::GulpError> {
+        match HeaderSchema::from_id(&mut app.get_gulp_conn().await?,header_schema_id).await {
+            Some(hs) => Ok(hs),
+            None => Err(crate::GulpError::String(format!("Can not retrieve header schema {header_schema_id}"))),
+        }
+    }
+
     pub fn from_name_json(name: &str, json: &str) -> Option<Self> {
         let json: serde_json::Value = serde_json::from_str(json).ok()?;
         let mut columns : Vec<HeaderColumn> = vec![];
@@ -297,7 +304,7 @@ impl Header {
         let list_id = self.list_id;
         let revision_id = self.revision_id;
         let header_schema_id = self.schema.id;
-        let sql = r#"INSERT INTO `header` (`list_id`,`revision_id`,`header_schema_id`) VALUES (:list_id,:revision_id,:header_schema_id)"# ;
+        let sql = r#"REPLACE INTO `header` (`list_id`,`revision_id`,`header_schema_id`) VALUES (:list_id,:revision_id,:header_schema_id)"# ;
         conn.exec_drop(sql, params!{list_id,revision_id,header_schema_id}).await?;
         if let Some(id) = conn.last_insert_id() {
             self.id = id
