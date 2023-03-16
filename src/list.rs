@@ -238,16 +238,17 @@ impl List {
     }
 
     async fn get_or_ignore_new_row(&self, conn: &mut Conn, md5s: &HashSet<String>, cells: Vec<Option<Cell>>, row_num: DbId, user_id: DbId) -> Result<Option<Row>, GulpError> {
-        let cells2j: Vec<serde_json::Value> = cells
+        let cells2j: Vec<_> = cells
             .iter()
             .zip(self.header.schema.columns.iter())
+            .collect();
+        let cells2j: Vec<serde_json::Value> = cells2j.iter().cloned()
             .map(|(cell,column)| cell.to_owned().map(|c|c.as_json(column)))
             .map(|cell| cell.unwrap_or_else(||json!(null)))
             .collect();
         let cells_json = json!{cells2j};
         let cells_json_text = cells_json.to_string();
         let json_md5 = Row::md5(&cells_json_text);
-
         let json_exists = if md5s.contains(&json_md5) {
             self.check_json_exists(conn, &cells_json_text,&json_md5).await?
         } else {
