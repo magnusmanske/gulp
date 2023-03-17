@@ -85,24 +85,28 @@ impl Row {
             .exec_iter(sql,params! {list_id,json_text,revision_id}).await.ok()?
             .map_and_drop(|_row| 1).await.ok()?.is_empty())
     }
-/*
-    pub async fn insert_new(&mut self, conn: &mut conn, user_id: DbId) -> Result<(), GulpError> {
-        let sql = r#"REPLACE INTO `row` (list_id,row_num,revision_id,json_id,user_id) VALUES (:list_id,:row_num,:revision_id,:json,:user_id)"#;
+
+    pub async fn add_or_replace(&mut self, header: &Header, conn: &mut Conn, user_id: DbId) -> Result<(), crate::GulpError> {
+        let sql = r#"REPLACE INTO `row` (list_id,row_num,revision_id,json,json_md5,user_id) VALUES (:list_id,:row_num,:revision_id,:json,:json_md5,:user_id)"#;
         let list_id = self.list_id;
         let row_num = self.row_num;
         let revision_id = self.revision_id;
-        let json = &self.json;
-        conn.exec_drop(sql, params!{list_id,row_num,revision_id,json}).await?;
-        self.id = conn.last_insert_id().ok_or_else(||"Row::insert_new")?;
+
+        let json = self.as_json(header)["c"].to_owned();
+        let json = serde_json::to_string(&json)?;
+        let json_md5 = Self::md5(&json);
+
+        conn.exec_drop(sql, params!{list_id,row_num,revision_id,json,json_md5,user_id}).await?;
+        self.id = conn.last_insert_id().ok_or_else(||"Row::add_or_replace")?;
         Ok(())
-    } */
+    }
 
     pub fn md5(s: &str) -> String {
         format!("{:x}",md5::compute(s))
     }
 
     pub fn as_json(&self, header: &Header) -> serde_json::Value {
-        let ret: Vec<serde_json::Value> = self
+        let cells: Vec<serde_json::Value> = self
             .cells
             .iter()
             .zip(header.schema.columns.iter())
@@ -117,7 +121,7 @@ impl Row {
             "row": self.row_num,
             "modified": self.modified,
             "user": self.user_id,
-            "c":ret,
+            "c":cells,
         });
         json!(ret)
     }

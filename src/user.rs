@@ -96,13 +96,14 @@ impl User {
         })
     }
 
-    async fn get_access_for_list(&self, list_id: DbId) -> HSS {
+    pub async fn get_access_for_list(&self, list_id: DbId) -> HSS {
         let mut access = self.access.lock().await;
         match access.get(&list_id) {
             Some(ret) => ret.to_owned(),
             None => {
                 let user_id = self.id;
-                let sql = "SELECT `right` FROM `access` WHERE `user_id`=:user_id AND `list_id`=:list_id" ;
+                // User #5 is "everyone that is logged in"
+                let sql = "SELECT DISTINCT `right` FROM `access` WHERE `user_id` IN (5,:user_id) AND `list_id`=:list_id" ;
                 let mut conn = match self.app.get_gulp_conn().await {
                     Ok(conn) => conn,
                     Err(_) => return HSS::new(),
@@ -141,5 +142,9 @@ impl User {
         let access = self.get_access_for_list(list_id).await;
         access.contains("admin") || access.contains("write") || access.contains("set_new_header_schema_for_list")
     }
-
+    pub async fn can_edit_row(&self, list_id: DbId) -> bool {
+        let access = self.get_access_for_list(list_id).await;
+        access.contains("admin") || access.contains("write") || access.contains("edit_row")
+    }
+    
 }

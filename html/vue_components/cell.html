@@ -1,28 +1,71 @@
+<style>
+.gulp-cell {
+	top:0px; left:0px; right:0px; bottom:0px;
+}
+input.string_edit { width: 20rem; }
+</style>
+
 <template id='cell-template'>
-<div v-if='typeof v!="undefined" && v!={}'>
-	<span v-if='header.column_type=="WikiPage"'>
-		<span v-if="typeof v=='string'">
-			{{v}}
-		</span>
-		<span v-else-if='v.wiki=="wikidatawiki" && [0,120].indexOf(v.namespace_id) != -1'>
-			<wd-link :item='value' smallq='1'></wd-link>
-		</span>
-		<span v-else-if='v.wiki=="commonswiki" && v.namespace_id==6'>
-			<span style="text-align: center; width:120px; display: inline-block;">
-				<commons-thumbnail :filename="v.title" width="120" :key="v.title"></commons-thumbnail>
+<div @dblclick.prevent="start_edit" class="gulp-cell">
+	<form v-if="editing" class="form" style="display: flex;" @submit.prevent="save">
+		<span @keydown.esc="cancel">
+			<span v-if='header.column_type=="WikiPage"'>
+				<table class="table table-borderless table-sm">
+					<tr v-if="!is_set(header.wiki)">
+						<td tt="wiki"></td>
+						<td><input class="form-control string_edit" type="text" v-model="v.wiki" /></td>
+					</tr>
+					<tr v-if="!is_set(header.namespace_id)">
+					<tr>
+						<td tt="title"></td>
+						<td>
+							<span v-if="is_set(header.namespace_id)" style="display: inline-block; font-family: 'Courier New', Courier, monospace;">
+								{{get_namespace_label(v.wiki??header.wiki,header.namespace_id)}}
+							</span>
+							<span v-else style="display: inline-block;">
+								<select v-model="v.namespace_id" class="form-control">
+									<option v-for="label,id in get_namespaces_for_wiki(v.wiki)" value="id">{{label}}</option>
+								</select>	
+							</span>
+							<input class="form-control string_edit" type="text" v-model="v.title" style="display: inline;" />
+						</td>
+					</tr>
+				</table>
 			</span>
-			<span style="margin-left:0.5rem; vertical-align: top;">{{v.title}}</span>
+			<span v-else-if='header.column_type=="String"'>
+				<input class="form-control string_edit" type="text" v-model="v" />
+			</span>
+			<span v-else>
+				Can not edit unknown type '{{header.column_type}}'.
+			</span>
+		</span>
+		<span style="font-size:14pt; white-space: nowrap">
+			<input type="submit" class="btn btn-sm btn-outline-primary" value="✓" />
+			<input type="button" class="btn btn-sm btn-outline-danger" value="&times;" @click.prevent="cancel" />
+		</span>
+	</form>
+	<div v-else-if='typeof v!="undefined" && v!={}'>
+		<span v-if='header.column_type=="WikiPage"'>
+			<span v-if='v.wiki=="wikidatawiki" && [0,120].indexOf(v.namespace_id) != -1'>
+				<wd-link :item='value' smallq='1'></wd-link>
+			</span>
+			<span v-else-if='v.wiki=="commonswiki" && v.namespace_id==6'>
+				<span style="text-align: center; width:120px; display: inline-block;">
+					<commons-thumbnail :filename="v.title" width="120" :key="v.title"></commons-thumbnail>
+				</span>
+				<span style="margin-left:0.5rem; vertical-align: top;">{{v.title}}</span>
+			</span>
+			<span v-else>
+				<a v-if="typeof v.title!='undefined'" :href="get_wiki_link()" target="_blank" class="wikipedia">{{v.title.replace(/_/g," ")}}</a>
+			</span>
+		</span>
+		<span v-else-if='header.column_type=="String"'>
+			{{v}}&nbsp;
 		</span>
 		<span v-else>
-			<a v-if="typeof v.title!='undefined'" :href="get_wiki_link()" target="_blank" class="wikipedia">{{v.title.replace(/_/g," ")}}</a>
+			<i>{{v}}</i>
 		</span>
-	</span>
-	<span v-else-if='header.column_type=="String"'>
-		{{v}}
-	</span>
-	<span v-else>
-		<i>{{v}}</i>
-	</span>
+	</div>
 </div>
 </template>
 
@@ -31,33 +74,91 @@
 'use strict';
 
 Vue.component ( 'cell' , {
-    props : [ 'header' , 'value' ] ,
-    data : function () { return { v:{} } } ,
+    props : [ 'header' , 'value' , 'user_can_edit' ] ,
+    data : function () { return { editing:false , v:{} , original_v:{} } } ,
     created : function () {
+		let v = this.standardize(this.header,this.value);
     	if ( this.header.column_type=="WikiPage" ) {
-    		let v = this.value;
-    		if ( typeof v=="string" ) v = {"title":v};
-    		v.wiki = v.wiki ?? this.header.wiki;
-    		v.namespace_id = v.namespace_id ?? this.header.namespace_id ?? 0;
     		ns_cache.load_namespaces([v.wiki],()=>{
 	    		v.prefixed_title = ns_cache.prefix_with_namespace(v.wiki,v.namespace_id,v.title) ;
     			this.v = v;
     		});
     	} else {
-    		this.v = this.value;
+    		this.v = v;
     	}
-    	//console.log(JSON.parse(JSON.stringify(this.header)))
     },
     updated : function () { tt.updateInterface(this.$el) } ,
     mounted : function () { tt.updateInterface(this.$el) } ,
     methods : {
     	get_wiki_link() {
-    		//console.log(JSON.parse(JSON.stringify(this.value)));
-    		//console.log(JSON.parse(JSON.stringify(this.v)));
     		let server = ns_cache.get_server_for_wiki(this.v.wiki);
     		let url = "https://"+server+"/wiki/"+encodeURIComponent(this.v.prefixed_title) ;
     		return url;
-    	}
+    	} ,
+		standardize(header,value) {
+			if ( !this.is_set(value) ) value = '';
+			if ( header.column_type=="WikiPage" ) {
+				if ( typeof value=='string' ) {
+					value = {wiki:header.wiki,namespace_id:header.namespace_id,title:value};
+				} else {
+					// Enforce header constraints
+					if ( this.is_set(header.wiki) ) value.wiki=header.wiki;
+					if ( this.is_set(header.namespace_id) ) value.namespace_id=header.namespace_id;
+				}
+				value.namespace_id = value.namespace_id ?? 0;
+				value.title = value.title.replace(/_/g,' ');
+				// console.log(JSON.parse(JSON.stringify(header)));}
+			}
+			// console.log(JSON.parse(JSON.stringify(value)));
+			return value;
+		},
+		simplify(header,value) {
+			if ( header.column_type=="WikiPage" ) { // Simplify to title, if possible
+				if ( this.is_set(header.wiki) || value.wiki=='' ) value.wiki = undefined;
+				if ( this.is_set(header.namespace_id) || value.namespace_id ) value.namespace_id = undefined;
+				if ( !this.is_set(value.wiki) && !this.is_set(value.namespace_id) ) value = value.title;
+			}
+			return value;
+		},
+		get_namespace_label(wiki,namespace_id) {
+			return ns_cache.cache[wiki][namespace_id].canonical;
+		},
+		get_namespaces_for_wiki(wiki) {
+			let ret = {} ;
+			Object.values(ns_cache.cache[wiki]).forEach(function(v){ ret[v.id]=v.canonical??'' });
+			return ret;
+		},
+		is_set(x) {
+			return typeof x!='undefined' && x!=null;
+		},
+		start_edit() {
+			if ( !this.user_can_edit ) {
+				console.log("You have not sufficient rights to edit entries in this list");
+				return;
+			}
+			this.original_v = this.v;
+			this.editing = true ;
+		},
+		save() {
+			let v = JSON.parse(JSON.stringify(this.v)); //let v = { ...this.v } ; // Clone
+			if ( this.header.column_type=="WikiPage" ) {
+				// v.title = v.title.replace(/ /g,'_');
+				v.prefixed_title = ns_cache.prefix_with_namespace(v.wiki,v.namespace_id,v.title) ;
+			}
+			if ( JSON.stringify(v)==JSON.stringify(this.original_v) ) { // Nothing has changed
+				this.editing = false;
+				return;
+			}
+			console.log(JSON.parse(JSON.stringify(this.original_v)));
+			console.log(JSON.parse(JSON.stringify(v)));
+			v = this.simplify(this.header,v);
+			this.$emit('cell-edited',v) ;
+			this.editing = false;
+		},
+		cancel() {
+			this.v = this.original_v;
+			this.editing = false;
+		},
     } ,
     template : '#cell-template'
 } ) ;

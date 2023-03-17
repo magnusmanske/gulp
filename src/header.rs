@@ -139,12 +139,23 @@ impl HeaderColumn {
             ColumnType::WikiPage => {
                 let mut parts = vec![];
                 if let Some(wiki) = &self.wiki {
-                    parts.push(Self::uc_first(&wiki.replace("wiki","")))
+                    // parts.push(Self::uc_first(&wiki.replace("wiki","")))
+                    parts.push(Self::uc_first(&wiki.to_string()))
                 }
                 if let Some(namespace_id) = self.namespace_id {
                     parts.push(format!("NS{namespace_id}"))
                 }
-                parts.join(" ")
+                let ret = parts.join(" ");
+                if ret=="Wikidatawiki NS0" {
+                    return "Wikidata item".into();
+                }
+                if ret=="Wikidatawiki NS120" {
+                    return "Wikidata property".into();
+                }
+                if ret=="Commonswiki NS6" {
+                    return "Commons file".into();
+                }
+                ret
             }
         }
     }

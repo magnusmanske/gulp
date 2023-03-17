@@ -36,7 +36,7 @@ ul.list-top li {
 					<router-link class="btn btn-outline-secondary" :to="'/list/update/'+list.list.id" tt="update"></router-link>
 				</li>
 		</div>
-		<list :list='list' :revision_id='revision_id'></list>
+		<list :list='list' :revision_id='revision_id' :user_can_edit="user_can_edit()"></list>
 	</div>
   </div>
 </div>
@@ -90,6 +90,9 @@ let ListPage = Vue.extend ( {
                 	}
                 })
     	} ,
+		user_can_edit() {
+			return this.list.rights.includes("admin") || this.list.rights.includes("write");
+		},
         load_list(resolve) {
         	let url = "/list/info/"+this.list_id;
         	if ( typeof this.initial_revision_id!='undefined') url += "?revision_id="+this.initial_revision_id;
@@ -100,7 +103,7 @@ let ListPage = Vue.extend ( {
                 	if ( typeof this.initial_revision_id=='undefined') this.revision_id=this.list.list.revision_id;
                 	else this.revision_id=this.initial_revision_id;
                 	this.revisions = [...Array(this.list.list.revision_id+1).keys()];
-                	this.revisions.reverse()
+                	this.revisions.reverse();
                 })
                 .then(resolve)
         } ,

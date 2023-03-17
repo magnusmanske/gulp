@@ -5,20 +5,22 @@
         <div class='row'>
             <batch-navigator :batch_size='len' :total='list.total' :current='start/len' :batch_size_options='[25,50,100]' @set-current='move_to(len*$event)' @set-size='set_len($event)'></batch-navigator>
         </div>
-		<table v-if="rows.length>0" class="table">
-            <tr>
-                <th v-for='column in columns'>{{column.label}}</th>
-                <th v-if="show_user" tt='user'></th>
-            </tr>
-            <tr v-for="row in rows" :key="row.row">
-                <td v-for="cell,idx in row.c">
-                    <cell :value='cell' :header='columns[idx]'></cell>
-                </td>
-                <td v-if="show_user">
-                    <router-link :to="'/user/'+row.user">{{list.users[row.user]}}</router-link>
-                </td>
-            </tr>
-        </table>
+        <div class="table-responsive-md">
+            <table v-if="rows.length>0" class="table table-bordered">
+                <tr>
+                    <th v-for='column in columns'>{{column.label}}</th>
+                    <th v-if="show_user" tt='user'></th>
+                </tr>
+                <tr v-for="row in rows" :key="get_row_id(row)" :id="get_row_id(row)">
+                    <td v-for="column,idx in columns" style="position:relative;;">
+                        <cell :value='row.c[idx]' :header='column' :user_can_edit="user_can_edit" @cell-edited="cell_edited(row,idx,$event)"></cell>
+                    </td>
+                    <td v-if="show_user">
+                        <router-link :to="'/user/'+row.user">{{list.users[row.user]}}</router-link>
+                    </td>
+                </tr>
+            </table>
+        </div>
         <div class='row'>
             <batch-navigator :batch_size='len' :total='list.total' :current='start/len' :batch_size_options='[25,50,100]' @set-current='move_to(len*$event)' @set-size='set_len($event)'></batch-navigator>
         </div>
@@ -32,7 +34,7 @@
 
 
 Vue.component ( 'list' , {
-    props : ['list','revision_id'] ,
+    props : ['list','revision_id','user_can_edit'] ,
     data : function () { return { start:0, len:25 , rows:[] , columns:[] , loading:true , show_user:false } } , //  list:{},
     created : function () {
         // TODO pre-cache wikidata items
@@ -58,7 +60,23 @@ Vue.component ( 'list' , {
                 .then((response) => response.json())
                 .then((d) => this.rows=d.rows)
                 .then(resolve)
-        }
+        } ,
+        get_row_id(row) {
+            return 'row_'+row.row;
+        },
+        cell_edited(row,idx,new_cell) {
+            let row_id = this.get_row_id(row);
+            $("#"+row_id).addClass("table-active");
+            row.c[idx] = new_cell;
+            console.log(JSON.parse(JSON.stringify(row)));
+            let url = "/list/row/"+this.list.list.id+"/"+row.row+"?json="+JSON.stringify(row);
+            console.log(url);
+            fetch(url)
+                .then((response) => response.json())
+                .then((d) => {
+                    $("#"+row_id).removeClass("table-active");
+                });
+        },
     } ,
     template:'#list-template'
 } );

@@ -70,7 +70,9 @@ function get_column_label(c,idx) {
             } else label += " page";
             return label;
         }
-    } else return "Column "+idx;
+    } else if ( c.column_type=='String' ) {
+        return tt.t("text");
+    } else return tt.t("column")+" "+(idx+1);
 }
 
 function set_user_data(d) {

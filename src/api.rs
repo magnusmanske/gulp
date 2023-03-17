@@ -36,7 +36,7 @@ async fn auth_info(State(state): State<Arc<AppState>>,cookies: Option<TypedHeade
     (StatusCode::OK, Json(j)).into_response()
 }
 
-async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>) -> Response {
+async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Query(params): Query<HashMap<String, String>>,cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let list = match AppState::get_list(&state,id).await {
         Some(list) => list,
         None => return json_error_gone(&format!("Error retrieving list; No list #{id} perhaps?")),
@@ -51,6 +51,10 @@ async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
         Ok(users_in_revision) => users_in_revision,
         Err(e) => return json_error(&e.to_string()),
     };
+    let rights: Vec<String> = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user.get_access_for_list(id).await.iter().cloned().collect(),
+        None => vec![],
+    };
     let j = json!({
         "status":"OK",
         "list":list.to_owned(),
@@ -58,6 +62,7 @@ async fn list_info(State(state): State<Arc<AppState>>, Path(id): Path<DbId>, Que
         "total":numer_of_rows,
         "revision_id":revision_id,
         "file_basename":list.get_file_basename(Some(revision_id)),
+        "rights":rights,
     });
     (StatusCode::OK, Json(j)).into_response()
 }
@@ -256,6 +261,59 @@ async fn new_list(State(state): State<Arc<AppState>>, Query(params): Query<HashM
     (StatusCode::OK, Json(j)).into_response()
 }
 
+// list_row
+async fn list_row(State(state): State<Arc<AppState>>, Path((list_id,row_num)): Path<(DbId,DbId)>, Query(params): Query<HashMap<String, String>>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
+    let user = match User::from_cookies(&state, &cookies).await {
+        Some(user) => user,
+        None => return json_error("Please log in to set a new header schema for a list"),
+    };
+    if !user.can_edit_row(list_id).await {
+        return json_error("You do not have permission to edit a row in list {list_id}");
+    }
+
+    let list = match AppState::get_list(&state,list_id).await {
+        Some(list) => list,
+        None => return json_error_gone(&format!("Error retrieving list; No list #{list_id} perhaps?")),
+    };
+    let list = list.lock().await;
+
+    let row_json = match params.get("json") {
+        Some(s) => s,
+        None => return json_error("No 'json' parameter"),
+    };
+
+    let cells: serde_json::Value = match serde_json::from_str(row_json) {
+        Ok(j) => j,
+        Err(e) => return json_error(&e.to_string()),
+    };
+    let cells = match cells["c"].as_array() {
+        Some(cells) => cells,
+        None => return json_error("Bad JSON"),
+    };
+    let cells: Vec<Option<crate::cell::Cell>> = cells
+        .iter()
+        .zip(list.header.schema.columns.iter())
+        .map(|(cell,column)|crate::cell::Cell::from_value(cell,column))
+        .collect();
+    
+    let mut row = crate::row::Row::from_cells(cells);
+    row.list_id = list_id;
+    row.revision_id = list.revision_id;
+    row.row_num = row_num;
+
+    let mut conn = match state.get_gulp_conn().await {
+        Ok(conn) => conn,
+        Err(e) => return json_error(&e.to_string()),
+    };
+    match row.add_or_replace(&list.header, &mut conn, user.id).await {
+        Ok(_) => {},
+        Err(e) => return json_error(&e.to_string()),
+    }
+    
+    let j = json!({"status":"OK"});
+    (StatusCode::OK, Json(j)).into_response()
+}
+
 async fn list_header_schema(State(state): State<Arc<AppState>>, Path((list_id,header_schema_id)): Path<(DbId,DbId)>, cookies: Option<TypedHeader<headers::Cookie>>,) -> Response {
     let user = match User::from_cookies(&state, &cookies).await {
         Some(user) => user,
@@ -422,6 +480,7 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GulpError> {
         .route("/list/sources/:id", get(list_sources))
         .route("/list/new", get(new_list))
         .route("/list/header_schema/:list_id/:header_schema_id", get(list_header_schema))
+        .route("/list/row/:list_id/:row_num", get(list_row))
 
         .route("/header/schemas", get(header_schemas))
         .route("/header/schema/new", get(new_header_schema))
