@@ -15,19 +15,9 @@
 	<div class="container mt-2">
 	<div v-if="!user().is_logged_in" class="row" tt="log_in_for_actions">
 	</div>
-	<div v-if="user().is_logged_in" class="row">
+	<div class="row">
 		<div class="col-md-12">
 			<h1 tt="create_new_header"></h1>
-			<form @submit.prevent="submit_form" class="form-inline">
-				<div>
-					<span tt="name"></span>
-					<input type="text" class="form-control" v-model="name" tt_placeholder="new_header_name" style="width:15rem" />
-				</div>
-				<input type="submit" :class="'btn btn-outline-primary'" tt_value="create_new_header" />
-				<span v-if="message!=''" style="margin-left:1rem; color:red;">
-					{{message}}
-				</span>
-			</form>
 		</div>
 	</div>
 	<div v-if="loading" class="row top-distance">
@@ -62,6 +52,20 @@
 			<button class="btn btn-outline-success" tt="create_new_column" @click.prevent="create_new_column"></button>
 		</div>
 	</div>
+	<div v-if="user().is_logged_in" class="row">
+		<div class="col-md-12">
+			<form @submit.prevent="submit_form" class="form-inline">
+				<div>
+					<span tt="name"></span>
+					<input type="text" class="form-control" v-model="name" tt_placeholder="new_header_name" style="width:15rem" />
+				</div>
+				<input v-if="!creating" type="submit" :class="'btn btn-outline-primary'" tt_value="create_new_header" />
+				<span v-if="message!=''" style="margin-left:1rem; color:red;">
+					{{message}}
+				</span>
+			</form>
+		</div>
+	</div>
 	<div v-if="!loading && rows.length>0" class="row top-distance">
 		<h2 tt="preview"></h2>
 		<table class="table">
@@ -69,7 +73,7 @@
                 <th v-for='column,idx in columns'>#{{idx+1}}: {{column.label||autoLabel(column,idx)}}</th>
             </tr>
             <tr v-for="row,rownum in rows" :key="rownum">
-                <td v-for="cell,idx in row.c">
+                <td v-for="cell,idx in row.c" style="position:relative; padding: 0px;">
                     <cell :value='cell' :header='columns[idx]'></cell>
                 </td>
             </tr>
@@ -85,7 +89,7 @@
 
 let CreateHeaderPage = Vue.extend ( {
 	props : ['source_id','list_id'] ,
-	data : function () { return { name:"", message:'', columns:[], rows:[], loading:true } } ,
+	data : function () { return { name:"", message:'', columns:[], rows:[], loading:true , creating:false } } ,
 	created : function () {
 		let url = "/source/header/"+this.source_id;
 		fetch(url)
@@ -141,7 +145,8 @@ let CreateHeaderPage = Vue.extend ( {
 				this.message = tt.t("columns_required") ;
 				return ;
 			}
-			this.message = "";
+			this.creating = true ;
+			this.message = tt.t("creating_new_header");
 			let payload = {
 				name: this.name,
 				json: JSON.stringify({ "columns": this.columns })

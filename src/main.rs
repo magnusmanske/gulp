@@ -14,6 +14,8 @@ pub mod app_state;
 pub mod oauth;
 pub mod database_session_store;
 pub mod data_source;
+pub mod data_source_as_file;
+pub mod data_source_line_converter;
 pub mod gulp_response;
 pub mod header;
 pub mod cell;
