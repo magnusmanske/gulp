@@ -310,7 +310,7 @@ async fn list_row(State(state): State<Arc<AppState>>, Path((list_id,row_num)): P
         Err(e) => return json_error(&e.to_string()),
     }
     
-    let j = json!({"status":"OK"});
+    let j = json!({"status":"OK","row":row.as_json(&list.header)});
     (StatusCode::OK, Json(j)).into_response()
 }
 

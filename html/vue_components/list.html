@@ -12,7 +12,7 @@
                     <th v-if="show_user" tt='user'></th>
                 </tr>
                 <tr v-for="row in rows" :key="get_row_id(row)" :id="get_row_id(row)">
-                    <td v-for="column,idx in columns" style="position:relative;;">
+                    <td v-for="column,idx in columns" style="position:relative; padding: 0px;">
                         <cell :value='row.c[idx]' :header='column' :user_can_edit="user_can_edit" @cell-edited="cell_edited(row,idx,$event)"></cell>
                     </td>
                     <td v-if="show_user">
@@ -68,13 +68,18 @@ Vue.component ( 'list' , {
             let row_id = this.get_row_id(row);
             $("#"+row_id).addClass("table-active");
             row.c[idx] = new_cell;
-            console.log(JSON.parse(JSON.stringify(row)));
+            // console.log(JSON.parse(JSON.stringify(row)));
             let url = "/list/row/"+this.list.list.id+"/"+row.row+"?json="+JSON.stringify(row);
-            console.log(url);
+            // console.log(url);
             fetch(url)
                 .then((response) => response.json())
                 .then((d) => {
                     $("#"+row_id).removeClass("table-active");
+                    if ( d.status=='OK' ) {
+                        row = d.row;
+                    } else {
+                        alert(d.status);
+                    }
                 });
         },
     } ,

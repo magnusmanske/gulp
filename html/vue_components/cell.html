@@ -1,6 +1,7 @@
 <style>
 .gulp-cell {
 	top:0px; left:0px; right:0px; bottom:0px;
+	padding:12px;
 }
 input.string_edit { width: 20rem; }
 </style>
@@ -27,13 +28,13 @@ input.string_edit { width: 20rem; }
 									<option v-for="label,id in get_namespaces_for_wiki(v.wiki)" value="id">{{label}}</option>
 								</select>	
 							</span>
-							<input class="form-control string_edit" type="text" v-model="v.title" style="display: inline;" />
+							<input class="form-control string_edit" type="text" v-model="v.title" style="display: inline;" ref="initial_input" autofocus />
 						</td>
 					</tr>
 				</table>
 			</span>
 			<span v-else-if='header.column_type=="String"'>
-				<input class="form-control string_edit" type="text" v-model="v" />
+				<input class="form-control string_edit" type="text" v-model="v" ref="initial_input" autofocus />
 			</span>
 			<span v-else>
 				Can not edit unknown type '{{header.column_type}}'.
@@ -107,9 +108,7 @@ Vue.component ( 'cell' , {
 				}
 				value.namespace_id = value.namespace_id ?? 0;
 				value.title = value.title.replace(/_/g,' ');
-				// console.log(JSON.parse(JSON.stringify(header)));}
 			}
-			// console.log(JSON.parse(JSON.stringify(value)));
 			return value;
 		},
 		simplify(header,value) {
@@ -136,21 +135,24 @@ Vue.component ( 'cell' , {
 				console.log("You have not sufficient rights to edit entries in this list");
 				return;
 			}
-			this.original_v = this.v;
+			this.original_v = JSON.parse(JSON.stringify(this.v));
 			this.editing = true ;
+			this.$nextTick(() => {
+				const input = this.$refs.initial_input;
+				input.focus();
+			});
 		},
 		save() {
 			let v = JSON.parse(JSON.stringify(this.v)); //let v = { ...this.v } ; // Clone
 			if ( this.header.column_type=="WikiPage" ) {
-				// v.title = v.title.replace(/ /g,'_');
 				v.prefixed_title = ns_cache.prefix_with_namespace(v.wiki,v.namespace_id,v.title) ;
 			}
+			// console.log(JSON.parse(JSON.stringify(this.original_v)));
+			// console.log(JSON.parse(JSON.stringify(v)));
 			if ( JSON.stringify(v)==JSON.stringify(this.original_v) ) { // Nothing has changed
 				this.editing = false;
 				return;
 			}
-			console.log(JSON.parse(JSON.stringify(this.original_v)));
-			console.log(JSON.parse(JSON.stringify(v)));
 			v = this.simplify(this.header,v);
 			this.$emit('cell-edited',v) ;
 			this.editing = false;
