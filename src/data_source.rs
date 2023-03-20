@@ -24,7 +24,7 @@ pub struct DataSourceTypePagePile {}
 
 
 #[derive(Clone, Debug, Serialize)]
-pub struct LineSet {
+pub struct FileWithHeader {
     pub headers: Vec<HeaderColumn>,
     #[serde(skip)]
     pub file: Arc<File>,
@@ -65,13 +65,30 @@ impl DataSourceFormatJSONL {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSourceFormatExcel {}
+
+impl DataSourceFormatExcel {
+    pub fn guess_headers(&self, lines: &Vec<String>) -> Vec<HeaderColumn> {
+        let columns = lines
+            .iter()
+            .filter_map(|line|serde_json::from_str::<serde_json::Value>(line).ok())
+            .filter_map(|v|v.as_array().cloned())
+            .map(|array|array.len())
+            .max()
+            .unwrap_or(0);
+        let header = HeaderColumn{ column_type: ColumnType::String, wiki: None, string: None, namespace_id: None };
+        std::iter::repeat(header).take(columns).collect()
+    }
+}
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DataSourceFormatPagePile {}
 
 impl DataSourceFormatPagePile {
-    pub fn get_lines_actually(&self, line_set: &mut LineSet, limit: usize) -> Result<(String,Vec<String>),GulpError> {
-        let file = Arc::get_mut(&mut line_set.file).unwrap();
+    pub fn get_lines_actually(&self, header_file: &mut FileWithHeader, limit: usize) -> Result<(String,Vec<String>),GulpError> {
+        let file = Arc::get_mut(&mut header_file.file).unwrap();
         let mut reader = BufReader::new(file);
         let mut text = String::new();
         reader.read_to_string(&mut text)?;
@@ -103,6 +120,7 @@ pub enum DataSourceFormat {
     CSV,
     JSONL,
     PAGEPILE,
+    EXCEL,
 }
 
 impl DataSourceFormat {
@@ -112,6 +130,7 @@ impl DataSourceFormat {
             "TSV" => Some(Self::TSV),
             "JSONL" => Some(Self::JSONL),
             "PAGEPILE" => Some(Self::PAGEPILE),
+            "XLS" => Some(Self::EXCEL),
             _ => None,
         }
     }
@@ -122,6 +141,7 @@ impl DataSourceFormat {
             Self::TSV => "TSV",
             Self::JSONL => "JSONL",
             Self::PAGEPILE => "PAGEPILE",
+            Self::EXCEL => "XLS",
         }.to_string()
     }
 
@@ -131,6 +151,7 @@ impl DataSourceFormat {
             Self::TSV => Box::new(DataSourceFormatTSV {}),
             Self::JSONL => Box::new(DataSourceFormatJSONL {}),
             Self::PAGEPILE => Box::new(DataSourceFormatPagePile {}),
+            Self::EXCEL => Box::new(DataSourceFormatExcel {}),
         })
     }
 }
@@ -194,7 +215,7 @@ impl DataSource {
     }
 
     pub async fn from_db(app: &Arc<AppState>, source_id: DbId) -> Option<Self> {
-        let sql = r#"SELECT * FROM data_source WHERE id=:source_id"#;
+        let sql = r#"SELECT id,list_id,source_type,source_format,location,user_id FROM data_source WHERE id=:source_id"#;
         app.get_gulp_conn().await.ok()?
             .exec_iter(sql,params! {source_id}).await.ok()?
             .map_and_drop(|row| Self::from_row(&row)).await.ok()?.get(0)?.to_owned()
@@ -214,14 +235,14 @@ impl DataSource {
     }
 
     pub async fn get_cells(&self, limit: Option<usize>) -> Result<CellSet,GulpError> {
-        let mut line_set = self.get_line_set().await?;
+        let mut header_file = self.get_line_set().await?;
         let lh = self.source_format.line_converter();
-        lh.get_cells(&mut line_set, limit)
+        lh.get_cells(&mut header_file, limit)
     }
 
     pub async fn guess_headers(&self, limit: Option<usize>) -> Result<CellSet,GulpError> {
-        let mut line_set = self.get_line_set().await?;
-        let cell_set = self.source_format.line_converter().get_cells(&mut line_set, limit)?;
+        let mut header_file = self.get_line_set().await?;
+        let cell_set = self.source_format.line_converter().get_cells(&mut header_file, limit)?;
         let headers = cell_set.headers.to_owned();
         let futures: Vec<_> = headers
             .iter()
@@ -231,16 +252,16 @@ impl DataSource {
             .collect();
         
         // Use new headers
-        line_set.headers = futures::future::join_all(futures).await;
-        let cell_set = self.source_format.line_converter().get_cells(&mut line_set, limit)?;
+        header_file.headers = futures::future::join_all(futures).await;
+        let cell_set = self.source_format.line_converter().get_cells(&mut header_file, limit)?;
 
         Ok(cell_set)
     }
 
 
-    async fn get_line_set(&self) -> Result<LineSet,GulpError> {
+    async fn get_line_set(&self) -> Result<FileWithHeader,GulpError> {
         let lh = self.source_type.line_handler();
-        Ok(LineSet { headers: vec![], file: Arc::new(lh.as_file(self)?) })
+        Ok(FileWithHeader { headers: vec![], file: Arc::new(lh.as_file(self)?) })
     }
 
 }

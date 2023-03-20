@@ -38,7 +38,7 @@
 						</select>
 						<span v-if="col.column_type=='WikiPage'" class="margin-left">
 							<span tt="wiki"></span><input type="text" v-model="col.wiki" class="form-control short-form-control" />
-							<span tt="namespace_id"></span><input type="text" v-model="col.namespace_id" class="form-control short-form-control" />
+							<span tt="namespace_id"></span><input type="text" v-model="col.namespace_id" class="form-control short-form-control" tt_placeholder="numeric" />
 						</span>
 						<span v-else-if="col.column_type=='String'" class="margin-left">
 							<!-- Nothing -->
@@ -57,7 +57,7 @@
 			<form @submit.prevent="submit_form" class="form-inline">
 				<div>
 					<span tt="name"></span>
-					<input type="text" class="form-control" v-model="name" tt_placeholder="new_header_name" style="width:15rem" />
+					<input type="text" class="form-control" v-model="name" tt_placeholder="new_header_name" style="width:20rem" />
 				</div>
 				<input v-if="!creating" type="submit" :class="'btn btn-outline-primary'" tt_value="create_new_header" />
 				<span v-if="message!=''" style="margin-left:1rem; color:red;">

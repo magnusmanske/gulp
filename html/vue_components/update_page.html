@@ -10,7 +10,11 @@
 
 	
 			<div v-if="loading"></div>
-			<div v-if="existing_sources.length>0">
+			<div v-if="list_or_new=='new'" class="row">
+				<input v-if="list_id==0" type="text" class="form-control" v-model="new_list_name" tt_placeholder="new_list_name" style="width:25rem" />
+				<i v-else tt="list_was_created"></i>
+			</div>
+			<div v-else-if="existing_sources.length>0" class="row">
 				<h2 tt="existing_sources"></h2>
 				<table class="table">
 					<tr>
@@ -52,7 +56,7 @@
 				<i tt="no_existing_sources"></i>
 			</div>
 	
-			<h2 tt="create_new_source"></h2>
+			<h2 tt="create_new_source" style="margin-top:1rem;"></h2>
 			<div class="row" style="min-height: 3rem;">
 				<div class="col-sm-1">
 					<span tt="source_type" style="font-weight: bold;"></span>
@@ -115,6 +119,11 @@
 							<span tt="tsv"></span>
 						</label>
 						<label>
+							<input type="radio" v-model="source_format" value="XLS" />
+							<span tt="xls"></span>
+						</label>
+						<br />
+						<label>
 							<input type="radio" v-model="source_format" value="JSONL" />
 							<span tt="jsonl"></span>
 							<a href="https://jsonlines.org/" target="_blank">ⓘ</a>
@@ -139,11 +148,11 @@
 let UpdatePage = Vue.extend ( {
 	props : ["list_or_new"] ,
 	data : function () { return { list_or_new_is_valid:false , list_id:0, source_type:"URL" , source_format:"TSV" , location:"" ,
-		existing_sources:[] , users:{} , loading:true , uploaded_file:undefined,
+		existing_sources:[] , users:{} , loading:true , uploaded_file:undefined, new_list_name:''
 	} } ,
 	created : function () {
 		if ( !isNaN(this.list_or_new) ) this.list_id = this.list_or_new*1;
-		this.list_or_new_is_valid = !isNaN(this.list_or_new) ; // this.list_or_new=="new" || 
+		this.list_or_new_is_valid = !isNaN(this.list_or_new) || this.list_or_new=="new" ;
 		// TODO check if user has write access
 		this.load_existing_sources() ;
 	},
@@ -186,8 +195,30 @@ let UpdatePage = Vue.extend ( {
 			}
 			return this.location!='';
 		},
+		create_list_name() {
+			let list_name = this.new_list_name.trim();
+			if ( list_name=='' ) {
+				alert(tt.t("list_name_required"));
+				return;
+			}
+			let url = "/list/new?name="+encodeURIComponent(list_name);
+			fetch(url)
+				.then((response) => response.json())
+				.then((d) => {
+					if (d.status=="OK") {
+						this.list_id = d.data;
+						this.create_new_source();
+					} else {
+						alert(d.status);
+					}
+				})
+
+		},
 		create_new_source() {
 			if ( !this.is_valid() ) return ;
+			if ( this.list_or_new=='new' && this.list_id==0 ) {
+				return this.create_list_name();
+			}
 			if ( typeof this.list_id!='undefined' ) {
 				let source_format = this.source_format;
 				if ( this.source_type=="PAGEPILE" ) source_format = this.source_type;

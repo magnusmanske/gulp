@@ -35,3 +35,4 @@ async-trait = "*"
 csv = "*"
 uuid = { version="*", features = ["v4"] }
 tempfile = "*"
+office = "*"
