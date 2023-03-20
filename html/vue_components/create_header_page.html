@@ -35,12 +35,16 @@
 						<select v-model="col.column_type" class="form-control short-form-control">
 							<option value="WikiPage" tt="wikipage"></option>
 							<option value="String" tt="string"></option>
+							<option value="Location" tt="location"></option>
 						</select>
 						<span v-if="col.column_type=='WikiPage'" class="margin-left">
 							<span tt="wiki"></span><input type="text" v-model="col.wiki" class="form-control short-form-control" />
 							<span tt="namespace_id"></span><input type="text" v-model="col.namespace_id" class="form-control short-form-control" tt_placeholder="numeric" />
 						</span>
 						<span v-else-if="col.column_type=='String'" class="margin-left">
+							<!-- Nothing -->
+						</span>
+						<span v-else-if="col.column_type=='Location'" class="margin-left">
 							<!-- Nothing -->
 						</span>
 					</td>

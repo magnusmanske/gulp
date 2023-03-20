@@ -27,19 +27,63 @@ impl WikiPage {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Location {
+    lat: f64,
+    lon: f64,
+}
+
+impl Location {
+    pub fn as_json(&self, _column: &HeaderColumn) -> serde_json::Value {
+        json!(self)
+    }
+
+    pub fn as_string(&self, _column: &HeaderColumn) -> String {
+        format!("{}, {}", self.lat, self.lon)
+    }
+}
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Cell {
     WikiPage(WikiPage),
     String(String),
+    Location(Location),
 }
 
 impl Cell {
     pub fn from_value(value: &serde_json::Value, column: &HeaderColumn) -> Option<Self> {
         match column.column_type {
             ColumnType::String => Some(Self::String(value.as_str()?.to_string())),
-            ColumnType::WikiPage => Some(Self::new_wiki_page(value, column)?),
+            ColumnType::WikiPage => Self::new_wiki_page(value, column),
+            ColumnType::Location => Self::new_location(value),
+        }
+    }
+
+    fn new_location(value: &serde_json::Value) -> Option<Self> {
+        if let Some(s) = value.as_str() {
+            let mut ret = None ;
+            for cap in crate::header::RE_LOCATION.captures_iter(&s) {
+                ret = Some(Self::Location(Location {
+                    lat: cap[1].parse::<f64>().ok()?,
+                    lon: cap[2].parse::<f64>().ok()?,
+                }));
+            }
+            ret
+        } else {
+            Some(Self::Location(Location {
+                lat: Self::value_as_f64(&value["lat"])?,
+                lon: Self::value_as_f64(&value["lon"])?,
+            }))
+        }
+    }
+
+    // Gets a f64 from a Value, if it is either str or f64
+    fn value_as_f64(v: &serde_json::Value) -> Option<f64> {
+        if let Some(s) = v.as_str() {
+            s.parse::<f64>().ok()
+        } else {
+            v.as_f64()
         }
     }
 
@@ -81,6 +125,7 @@ impl Cell {
         match self {
             Cell::String(s) => json!(s),
             Cell::WikiPage(wp) => wp.as_json(column),
+            Cell::Location(location) => location.as_json(column),
         }
     }
 
@@ -88,6 +133,7 @@ impl Cell {
         match self {
             Cell::String(s) => s.to_owned(),
             Cell::WikiPage(wp) => wp.as_string(column),
+            Cell::Location(location) => location.as_string(column),
         }
     }
 }

@@ -68,9 +68,7 @@ Vue.component ( 'list' , {
             let row_id = this.get_row_id(row);
             $("#"+row_id).addClass("table-active");
             row.c[idx] = new_cell;
-            // console.log(JSON.parse(JSON.stringify(row)));
             let url = "/list/row/"+this.list.list.id+"/"+row.row+"?json="+JSON.stringify(row);
-            // console.log(url);
             fetch(url)
                 .then((response) => response.json())
                 .then((d) => {

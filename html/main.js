@@ -72,6 +72,8 @@ function get_column_label(c,idx) {
         }
     } else if ( c.column_type=='String' ) {
         return tt.t("text");
+    } else if ( c.column_type=='Location' ) {
+        return tt.t("location");
     } else return tt.t("column")+" "+(idx+1);
 }
 

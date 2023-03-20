@@ -36,6 +36,16 @@ input.string_edit { width: 20rem; }
 			<span v-else-if='header.column_type=="String"'>
 				<input class="form-control string_edit" type="text" v-model="v" ref="initial_input" autofocus />
 			</span>
+			<span v-else-if='header.column_type=="Location"'>
+				<div>
+					<span tt="lat" style="display:inline-block; width: 5rem;"></span>
+					<input class="form-control string_edit" type="text" v-model="v.lat" ref="initial_input" style="display: inline; width:10rem;" autofocus />
+				</div>
+				<div>
+					<span tt="lon" style="display:inline-block; width: 5rem;"></span>
+					<input class="form-control string_edit" type="text" v-model="v.lon" ref="initial_input" style="display: inline; width:10rem;" />
+				</div>
+			</span>
 			<span v-else>
 				Can not edit unknown type '{{header.column_type}}'.
 			</span>
@@ -62,6 +72,14 @@ input.string_edit { width: 20rem; }
 		</span>
 		<span v-else-if='header.column_type=="String"'>
 			{{v}}&nbsp;
+		</span>
+		<span v-else-if='header.column_type=="Location"'>
+			{{v.lat}} / {{v.lon}}
+			<small>
+				<a class="external" target="_blank" :href="'https://wikishootme.toolforge.org/#lat='+v.lat+'&lng='+v.lon+'&zoom=15'" tt="wsm" tt_title="wsm_long"></a>
+				|
+				<a class="external" target="_blank" :href="'https://www.openstreetmap.org/#map=6/'+v.lat+'/'+v.lon" tt="osm" tt_title="osm_long"></a>
+			</small>
 		</span>
 		<span v-else>
 			<i>{{v}}</i>
@@ -132,7 +150,7 @@ Vue.component ( 'cell' , {
 		},
 		start_edit() {
 			if ( !this.user_can_edit ) {
-				console.log("You have not sufficient rights to edit entries in this list");
+				alert("You have not sufficient rights to edit entries in this list");
 				return;
 			}
 			this.original_v = JSON.parse(JSON.stringify(this.v));

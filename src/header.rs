@@ -11,6 +11,7 @@ lazy_static!{
     static ref RE_WIKIDATA : Regex = Regex::new(r#"^[PQ]\d+$"#).expect("Regexp error");
     static ref RE_WIKIDATA_ITEM : Regex = Regex::new(r#"^Q\d+$"#).expect("Regexp error");
     static ref RE_FILE : Regex = Regex::new(r#"^(?i).+\.(jpg|jpeg|tif|tiff|png)$"#).expect("Regexp error");
+    pub static ref RE_LOCATION : Regex = Regex::new(r#"^([-+]?\d+|[-+]?\d*\.\d+)°?\s*[,/]?\s*([-+]?\d+|[-+]?\d*\.\d+)°?$"#).expect("Regexp error");
 }
 
 
@@ -21,6 +22,7 @@ pub type DbId = u64;
 pub enum ColumnType {
     String,
     WikiPage,
+    Location,
 }
 
 impl ColumnType {
@@ -28,6 +30,7 @@ impl ColumnType {
         match s {
             "String" => Some(Self::String),
             "WikiPage" => Some(Self::WikiPage),
+            "Location" => Some(Self::Location),
             _ => None
         }
     }
@@ -62,13 +65,18 @@ impl HeaderColumn {
         let mut files_to_check = vec![];
         let mut stats: HashMap<&str,usize> = HashMap::from([
             ("total",0),
+            ("not_empty",0),
             ("wikidata",0),
             ("wikidata_ns0",0),
             ("file",0),
             ("commons_ns6",0),
+            ("location",0),
             ]);
         for cell in &cells {
             *stats.get_mut("total").unwrap() += 1 ;
+            if !cell.as_string(self).is_empty() {
+                *stats.get_mut("not_empty").unwrap() += 1 ;
+            }
             match cell {
                 Cell::WikiPage(_) => {}, // Ignore
                 Cell::String(s) => {
@@ -79,8 +87,24 @@ impl HeaderColumn {
                         files_to_check.push(format!("File:{s}"));
                     }
                     pages_to_check.push(s.replace("_"," "));
+                    if RE_LOCATION.is_match(&s) {
+                        *stats.get_mut("location").unwrap() += 1;
+                    }
+
+                },
+                Cell::Location(_) => {
+                    *stats.get_mut("location").unwrap() += 1;
                 },
             }
+        }
+        if stats["location"]>=stats["not_empty"] {
+            let ret = HeaderColumn {
+                column_type: ColumnType::Location, 
+                wiki: None,
+                string: None, 
+                namespace_id: None,
+            };
+            return ret;
         }
         if !pages_to_check.is_empty() {
             let mut best_wiki = "";
@@ -157,6 +181,7 @@ impl HeaderColumn {
                 }
                 ret
             }
+            ColumnType::Location => "location".into(),
         }
     }
 

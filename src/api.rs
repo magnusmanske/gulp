@@ -282,11 +282,11 @@ async fn list_row(State(state): State<Arc<AppState>>, Path((list_id,row_num)): P
         None => return json_error("No 'json' parameter"),
     };
 
-    let cells: serde_json::Value = match serde_json::from_str(row_json) {
+    let values: serde_json::Value = match serde_json::from_str(row_json) {
         Ok(j) => j,
         Err(e) => return json_error(&e.to_string()),
     };
-    let cells = match cells["c"].as_array() {
+    let cells = match values["c"].as_array() {
         Some(cells) => cells,
         None => return json_error("Bad JSON"),
     };
