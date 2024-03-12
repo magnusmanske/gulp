@@ -1,0 +1,1 @@
+web: GULP_ADDRESS=0.0.0.0 GULP_PORT=$PORT ./target/release/gulp server /data/project/gulp/gulp/config.json

@@ -628,8 +628,14 @@ pub async fn run_server(shared_state: Arc<AppState>) -> Result<(), GulpError> {
         .layer(CompressionLayer::new())
         .layer(cors);
 
-    let port: u16 = shared_state.webserver_port;
-    let ip = [0, 0, 0, 0];
+    let port: u16 = match std::env::var("GULP_PORT") {
+        Ok(port) => port
+            .as_str()
+            .parse::<u16>()
+            .unwrap_or(shared_state.webserver_port),
+        Err(_) => shared_state.webserver_port,
+    };
+    let ip = [0, 0, 0, 0]; // TODO use std::env::var("GULP_ADDRESS")
 
     let addr = SocketAddr::from((ip, port));
     tracing::info!("listening on http://{}", addr);

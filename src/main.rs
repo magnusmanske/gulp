@@ -30,6 +30,9 @@ pub mod user;
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
+
+    #[arg(short, long, default_value_t = format!("config.json"))]
+    config_file: String,
 }
 
 #[derive(Subcommand, Debug)]
@@ -42,7 +45,7 @@ enum Commands {
 async fn main() -> Result<(), GulpError> {
     let cli = Cli::parse();
 
-    let app = Arc::new(AppState::from_config_file("config.json").expect("app creation failed"));
+    let app = Arc::new(AppState::from_config_file(&cli.config_file).expect("app creation failed"));
 
     match &cli.command {
         Some(Commands::Server) => {
