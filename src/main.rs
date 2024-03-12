@@ -1,29 +1,29 @@
 #[macro_use]
 extern crate lazy_static;
 
-use clap::{Parser, Subcommand};
+use api::run_server;
 use app_state::AppState;
+use clap::{Parser, Subcommand};
+pub use error::GulpError;
 use header::HeaderSchema;
 use std::sync::Arc;
-use api::run_server;
-pub use error::GulpError;
 
-pub mod error;
 pub mod api;
 pub mod app_state;
-pub mod oauth;
-pub mod database_session_store;
+pub mod cell;
+pub mod column;
 pub mod data_source;
 pub mod data_source_as_file;
 pub mod data_source_line_converter;
+pub mod database_session_store;
+pub mod error;
+pub mod file;
 pub mod gulp_response;
 pub mod header;
-pub mod cell;
-pub mod row;
 pub mod list;
-pub mod file;
+pub mod oauth;
+pub mod row;
 pub mod user;
-
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -38,8 +38,6 @@ enum Commands {
     Test,
 }
 
-
-
 #[tokio::main]
 async fn main() -> Result<(), GulpError> {
     let cli = Cli::parse();
@@ -51,8 +49,8 @@ async fn main() -> Result<(), GulpError> {
             run_server(app).await?;
         }
         Some(Commands::Test) => {
-            let hs = HeaderSchema::from_id_app(&app,6).await.unwrap();
-            println!("{}",hs.generate_name());
+            let hs = HeaderSchema::from_id_app(&app, 6).await.unwrap();
+            println!("{}", hs.generate_name());
             // let source = DataSource::from_db(&app,8).await.unwrap();
             // let list = list::List::from_id(&app, source.list_id).await.unwrap();
             // list.update_from_source(&source, 1).await.unwrap();
@@ -76,7 +74,7 @@ async fn main() -> Result<(), GulpError> {
             // let user_name = j.get("username").unwrap().as_str().unwrap();
             // let user_id = app.get_or_create_wiki_user_id(user_name).await.unwrap();
             // println!("{user_id}");
-        
+
             /*
             let list = AppState::get_list(&app,4).await.expect("List does not exists");
             let list = list.lock().await;
@@ -94,13 +92,8 @@ async fn main() -> Result<(), GulpError> {
         }
     }
 
-
     Ok(())
 }
-
-
-
-
 
 /*
 ssh magnus@tools-login.wmflabs.org -L 3308:tools-db:3306 -N &

@@ -1,9 +1,7 @@
-use std::sync::Arc;
+use crate::{app_state::AppState, header::DbId};
 use mysql_async::prelude::*;
-use serde::{Serialize, Deserialize};
-use crate::{header::DbId, app_state::AppState};
-
-
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct File {
@@ -14,21 +12,41 @@ pub struct File {
 }
 
 impl File {
-    pub async fn create_new(app: &Arc<AppState>, path: &str, user_id: DbId, original_filename: &str) -> Option<Self> {
+    pub async fn create_new(
+        app: &Arc<AppState>,
+        path: &str,
+        user_id: DbId,
+        original_filename: &str,
+    ) -> Option<Self> {
         let mut conn = app.get_gulp_conn().await.ok()?;
         let sql = "INSERT INTO `file` (`path`,`user_id`,`original_filename`) VALUES (:path,:user_id,:original_filename)" ;
-        conn.exec_drop(sql, params!{path, user_id, original_filename}).await.ok()?;
+        conn.exec_drop(sql, params! {path, user_id, original_filename})
+            .await
+            .ok()?;
         let file_id = conn.last_insert_id()?;
         drop(conn);
-        Some(Self{ id: file_id, path: path.to_string(), user_id , original_filename:original_filename.to_string() })
+        Some(Self {
+            id: file_id,
+            path: path.to_string(),
+            user_id,
+            original_filename: original_filename.to_string(),
+        })
     }
 
     pub async fn from_id(app: &Arc<AppState>, file_id: DbId) -> Option<Self> {
         let sql = r#"SELECT id,path,user_id,original_filename FROM `file` WHERE id=:file_id"#;
-        let row = app.get_gulp_conn().await.ok()?
-            .exec_iter(sql,params! {file_id}).await.ok()?
-            .map_and_drop(|row| row).await.ok()?
-            .get(0)?.to_owned();
+        let row = app
+            .get_gulp_conn()
+            .await
+            .ok()?
+            .exec_iter(sql, params! {file_id})
+            .await
+            .ok()?
+            .map_and_drop(|row| row)
+            .await
+            .ok()?
+            .first()?
+            .to_owned();
         Self::from_row(&row).await
     }
 
@@ -40,5 +58,4 @@ impl File {
             original_filename: row.get(3)?,
         })
     }
-
 }

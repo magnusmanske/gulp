@@ -1,22 +1,18 @@
 use crate::app_state::AppState;
-use std::sync::Arc;
 use async_session::{MemoryStore, Session, SessionStore};
 use axum::{
-    extract::State,
-    extract::Query,
     async_trait,
-    extract::{
-        rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts, TypedHeader,
-    },
+    extract::Query,
+    extract::State,
+    extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts, TypedHeader},
     http::{header::SET_COOKIE, HeaderMap},
     response::{IntoResponse, Redirect, Response},
     RequestPartsExt,
 };
-use http::{ request::Parts};
-use oauth2::{
-    reqwest::async_http_client, AuthorizationCode, CsrfToken, TokenResponse, 
-};
+use http::request::Parts;
+use oauth2::{reqwest::async_http_client, AuthorizationCode, CsrfToken, TokenResponse};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 pub static COOKIE_NAME: &str = "SESSION";
 
@@ -35,7 +31,8 @@ pub struct OAuthUser {
 }
 
 pub async fn toolforge_auth(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let (auth_url, _csrf_token) = state.oauth_client
+    let (auth_url, _csrf_token) = state
+        .oauth_client
         .authorize_url(CsrfToken::new_random)
         //.add_scope(Scope::new("identify".to_string()))
         .url();
@@ -69,10 +66,11 @@ pub struct AuthRequest {
 
 pub async fn login_authorized(
     Query(query): Query<AuthRequest>,
-    State(state): State<Arc<AppState>>
+    State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
     // Get an auth token
-    let token = state.oauth_client
+    let token = state
+        .oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
         .request_async(async_http_client)
         .await
@@ -87,10 +85,7 @@ pub async fn login_authorized(
         .await
         .unwrap();
 
-    let user_data: OAuthUser = user_data
-        .json::<OAuthUser>()
-        .await
-        .unwrap();
+    let user_data: OAuthUser = user_data.json::<OAuthUser>().await.unwrap();
 
     // Create a new session filled with user data
     let mut session = Session::new();

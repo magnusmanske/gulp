@@ -1,6 +1,6 @@
-use serde_json::json;
+use crate::{column::ColumnType, header::*};
 use serde::{Deserialize, Serialize};
-use crate::header::*;
+use serde_json::json;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WikiPage {
@@ -11,7 +11,7 @@ pub struct WikiPage {
 
 impl WikiPage {
     pub fn as_json(&self, column: &HeaderColumn) -> serde_json::Value {
-        if self.wiki==column.wiki && self.namespace_id==column.namespace_id {
+        if self.wiki == column.wiki && self.namespace_id == column.namespace_id {
             json!(self.title) // Short version, string only
         } else {
             json!(self) // Long version
@@ -19,10 +19,10 @@ impl WikiPage {
     }
 
     pub fn as_string(&self, column: &HeaderColumn) -> String {
-        if self.wiki==column.wiki && self.namespace_id==column.namespace_id {
+        if self.wiki == column.wiki && self.namespace_id == column.namespace_id {
             self.title.to_owned()
         } else {
-            format!("{:?}:{:?}:{}",&self.wiki,&self.namespace_id,&self.title)
+            format!("{:?}:{:?}:{}", &self.wiki, &self.namespace_id, &self.title)
         }
     }
 }
@@ -43,7 +43,6 @@ impl Location {
     }
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Cell {
     WikiPage(WikiPage),
@@ -62,8 +61,8 @@ impl Cell {
 
     fn new_location(value: &serde_json::Value) -> Option<Self> {
         if let Some(s) = value.as_str() {
-            let mut ret = None ;
-            for cap in crate::header::RE_LOCATION.captures_iter(&s) {
+            let mut ret = None;
+            for cap in crate::header::RE_LOCATION.captures_iter(s) {
                 ret = Some(Self::Location(Location {
                     lat: cap[1].parse::<f64>().ok()?,
                     lon: cap[2].parse::<f64>().ok()?,
@@ -144,17 +143,21 @@ mod tests {
 
     #[test]
     fn test_new_wiki_page() {
-        let column = HeaderColumn{ column_type: ColumnType::WikiPage, wiki: None, string: None, namespace_id: None };
+        let column = HeaderColumn {
+            column_type: ColumnType::WikiPage,
+            wiki: None,
+            string: None,
+            namespace_id: None,
+        };
         let j = json!({"title":"Abc","namespace_id":7,"wiki":"frwiki"});
         let c = Cell::new_wiki_page(&j, &column).expect("new_wiki_page failed");
         let wp = match c {
             Cell::WikiPage(wp) => wp,
-            _ => panic!("Not a WikiPage")
+            _ => panic!("Not a WikiPage"),
         };
-        assert_eq!(wp.title,"Abc");
-        assert_eq!(wp.namespace_id,Some(7));
-        assert_eq!(wp.wiki,Some("frwiki".to_string()));
-        assert_eq!(wp.as_json(&column),j); // Round trip
+        assert_eq!(wp.title, "Abc");
+        assert_eq!(wp.namespace_id, Some(7));
+        assert_eq!(wp.wiki, Some("frwiki".to_string()));
+        assert_eq!(wp.as_json(&column), j); // Round trip
     }
-
 }

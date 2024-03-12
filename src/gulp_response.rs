@@ -1,6 +1,5 @@
 use http::HeaderMap;
 
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContentType {
     // HTML,
@@ -36,11 +35,19 @@ impl ContentType {
         let mut headers = HeaderMap::new();
         match filename {
             Some(filename) => {
-                headers.insert(http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{filename}\";").parse().unwrap());
-            },
+                headers.insert(
+                    http::header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"{filename}\";")
+                        .parse()
+                        .unwrap(),
+                );
+            }
             None => {
-                headers.insert(http::header::CONTENT_DISPOSITION, format!("attachment;").parse().unwrap());
-            },
+                headers.insert(
+                    http::header::CONTENT_DISPOSITION,
+                    "attachment;".to_string().parse().unwrap(),
+                );
+            }
         }
         headers.insert(http::header::CONTENT_TYPE, self.as_str().parse().unwrap());
         headers
@@ -52,7 +59,8 @@ impl ContentType {
             ContentType::JSON => "json",
             ContentType::CSV => "csv",
             ContentType::TSV => "tsv",
-        }.to_lowercase()
+        }
+        .to_lowercase()
     }
 }
 
@@ -61,4 +69,3 @@ pub struct GulpResponse {
     pub s: String,
     pub content_type: ContentType,
 }
-
