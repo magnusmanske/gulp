@@ -6,7 +6,7 @@ use app_state::AppState;
 use clap::{Parser, Subcommand};
 pub use error::GulpError;
 use header::HeaderSchema;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 pub mod api;
 pub mod app_state;
@@ -29,10 +29,10 @@ pub mod user;
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
-    command: Option<Commands>,
+    command: Commands,
 
-    #[arg(short, long, default_value_t = format!("config.json"))]
-    config_file: String,
+    #[arg(short, long, value_name = "FILE")]
+    config: PathBuf,
 }
 
 #[derive(Subcommand, Debug)]
@@ -45,13 +45,14 @@ enum Commands {
 async fn main() -> Result<(), GulpError> {
     let cli = Cli::parse();
 
-    let app = Arc::new(AppState::from_config_file(&cli.config_file).expect("app creation failed"));
+    let config_path = cli.config.display().to_string();
+    let app = Arc::new(AppState::from_config_file(&config_path).expect("app creation failed"));
 
     match &cli.command {
-        Some(Commands::Server) => {
+        Commands::Server => {
             run_server(app).await?;
         }
-        Some(Commands::Test) => {
+        Commands::Test => {
             let hs = HeaderSchema::from_id_app(&app, 6).await.unwrap();
             println!("{}", hs.generate_name());
             // let source = DataSource::from_db(&app,8).await.unwrap();
@@ -89,9 +90,6 @@ async fn main() -> Result<(), GulpError> {
             let rev1_sub: Vec<_> = rev1.iter().filter(|row|row.row_num==5075).collect();
             println!("{} / {} : {:#?}",rev0.len(),rev1.len(),rev1_sub);
             */
-        }
-        None => {
-            println!("Command required");
         }
     }
 
